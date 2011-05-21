@@ -1,12 +1,29 @@
 from distutils.core import setup
+import os.path
+
+with open(os.path.join(os.path.dirname(__file__), 'README.md')) as f:
+    long_description = f.read().partition('\n\n\n')[0].partition('\n\n')[2]
 
 setup(
-    name='django_dust', 
-    description='Distributed Upload STorage for Django. A file backend that mirrors all incoming media files to several servers',
+    name='django_dust',
+    version='0.1',
+    description='Distributed Upload STorage for Django, a file backend '
+                'that mirrors all incoming media files to several servers',
+    long_description=long_description,
     packages=[
         'django_dust',
+        'django_dust.backends',
         'django_dust.management',
         'django_dust.management.commands',
-        'django_dust.backends'
+    ],
+    classifiers = [
+        "Development Status :: 3 - Alpha",
+        "Environment :: Web Environment",
+        "Framework :: Django",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: BSD License",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python",
+        "Topic :: Internet :: WWW/HTTP :: Site Management",
     ],
 )
