@@ -3,7 +3,7 @@
 File backend django_dust (Distributed Upload STorage) can store files coming
 into a Django site on several servers simultaneously. This works for files
 uploaded by users from admin or custom Django forms and also files created
-in application code provided it uses standrad [Storage API][1].
+in application code provided it uses standard [Storage API][1].
 
 The backend is needed for sites working in multi-server environment in order
 to accept uploaded files and have them available on all media servers
@@ -12,7 +12,7 @@ immediately for subsequent web requests that could be routed to any machine.
 The backend can also work in a completely remote mode when files are stored
 on different servers than those that handle web requests.
 
-Django_dust nicely handles situation when some of media servers are unavailable
+django_dust nicely handles situation when some of media servers are unavailable
 by keeping a queue of failed operations to repeat them afterwards.
 
 
@@ -77,7 +77,7 @@ The backend uses HTTP to transfer files to media servers. For this to work
 those servers should support HTTP methods PUT and DELETE. Despite of them
 being part of HTTP itself they are traditionally implemented by external
 modules supporting WebDAV. Hence make sure that  web servers have this module
-enabled. For security reasons it's better to enable it only for internal IPs
+enabled. For security reasons it's critical to enable it only for internal IPs
 to prevent external users from being able to write and delete server files.
 
 An example of lighttpd config:
@@ -88,6 +88,20 @@ An example of lighttpd config:
 
     $HTTP["remoteip"] ~= "^192\.168\.0\.[0-9]+$" {
       "webdav.activate = "enable"
+    }
+
+An example of nginx config, assuming it was compiled `--with-http_dav_module`:
+
+    server {
+        listen 192.168.0.10;
+        location / {
+            root /var/www/media;
+            dav_methods PUT DELETE;
+            create_full_put_path on;
+            dav_access user:rw group:r all:r;
+            allow 192.168.0.1/24;
+            deny all;
+        }
     }
 
 Note that URLs for PUTting and DELETEing files are built using `MEDIA_URL` and
