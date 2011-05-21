@@ -22,9 +22,7 @@ class RetryStorage(BaseRetryStorage):
         Retry.objects.create(**kwargs)
 
     def delete(self, retry):
-        if 'id' not in retry:
-            raise ValueError('Retry object must have an id.')
-        return Retry.objects.get(pk=retry['id']).delete()
+        Retry.objects.get(pk=retry['id']).delete()
 
     def filter_by_filename(self, filename):
         return imap(self._to_dict, Retry.objects.filter(filename=filename))
