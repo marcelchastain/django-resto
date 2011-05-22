@@ -80,10 +80,8 @@ class TestWebdavServer(BaseHTTPServer.HTTPServer):
 
     def run(self):
         self.running = True
-        while True:
+        while self.running:
             self.handle_request()
-            if not self.running:
-                break
 
 
 class WebdavTestCaseMixin(object):
