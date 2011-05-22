@@ -1,4 +1,3 @@
-# -*- coding:utf-8 -*-
 '''
 Command for processing a queue of failed media distribution operations
 (puts and deletes). It's expected to be called periodically by a scheduler.
