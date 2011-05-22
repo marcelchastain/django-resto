@@ -1,7 +1,11 @@
 import BaseHTTPServer
+import os
+import os.path
+import shutil
 import threading
 import urllib2
 
+from django.conf import settings
 from django.utils import unittest
 
 
@@ -27,9 +31,17 @@ class StopRequest(urllib2.Request):
 
 class TestWebdavRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
+    @property
+    def filename(self):
+        return self.path.lstrip('/')
+
+    @property
+    def content(self):
+        return self.rfile.read(int(self.headers['Content-Length']))
+
     def safe(self, include_content=True):
         try:
-            content = self.server.files[self.path]
+            content = self.server.get_file(self.filename)
         except KeyError:
             self.send_error(404)
         else:
@@ -52,16 +64,15 @@ class TestWebdavRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         try:
-            del self.server.files[self.path]
+            self.server.delete_file(self.filename)
         except KeyError:
             self.send_error(404)
         else:
             self.no_content()
 
     def do_PUT(self):
-        created = self.path not in self.server.files
-        content_length = int(self.headers['Content-Length'])
-        self.server.files[self.path] = self.rfile.read(content_length)
+        created = not self.server.has_file(self.filename)
+        self.server.create_file(self.filename, self.content)
         self.no_content(201 if created else 204)
 
     def do_STOP(self):
@@ -74,24 +85,52 @@ class TestWebdavRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
 class TestWebdavServer(BaseHTTPServer.HTTPServer):
 
-    def __init__(self, host='localhost', port=4080):
+    def __init__(self, host='localhost', port=4080, use_fs=False):
         self.files = {}
-        BaseHTTPServer.HTTPServer.__init__(self, (host, port), TestWebdavRequestHandler)
+        self.use_fs = use_fs
+        BaseHTTPServer.HTTPServer.__init__(self, (host, port),
+                TestWebdavRequestHandler)
+
+    def has_file(self, name):
+        return name in self.files
+
+    def get_file(self, name):
+        return self.files[name]
+
+    def create_file(self, name, content):
+        self.files[name] = content
+        if self.use_fs:
+            filename = os.path.join(settings.MEDIA_ROOT, name)
+            if not os.path.isdir(os.path.dirname(filename)):
+                os.makedirs(os.path.dirname(filename))
+            with open(filename, 'wb') as f:
+                f.write(content)
+
+    def delete_file(self, name):
+        del self.files[name]
+        if self.use_fs:
+            filename = os.path.join(settings.MEDIA_ROOT, name)
+            os.unlink(filename)
 
     def run(self):
         self.running = True
         while self.running:
             self.handle_request()
+        if self.use_fs and os.path.isdir(settings.MEDIA_ROOT):
+            shutil.rmtree(settings.MEDIA_ROOT)
 
 
 class WebdavTestCaseMixin(object):
 
     host = 'localhost'
     port = 4080
-    url = 'http://%s:%d/' % (host, port)
+    use_fs = False
+    filename = 'test.txt'
+    url = 'http://%s:%d/%s' % (host, port, filename)
+    filepath = os.path.join(settings.MEDIA_ROOT, filename)
 
     def setUp(self):
-        self.webdav = TestWebdavServer(self.host, self.port)
+        self.webdav = TestWebdavServer(self.host, self.port, self.use_fs)
         self.thread = threading.Thread(target=self.webdav.run)
         self.thread.daemon = True
         self.thread.start()
@@ -111,31 +150,55 @@ class WebdavTestCaseMixin(object):
                 'got HTTP %d' % (code, context.exception.code))
 
 
-class WebdavServerTestCase(WebdavTestCaseMixin, unittest.TestCase):
+class WebdavServerTestsMixin(object):
 
     def test_get(self):
         self.assertHttpErrorCode(404, urllib2.Request(self.url))
-        self.webdav.files['/'] = 'test'
+        self.webdav.create_file(self.filename, 'test')
         body = self.assertHttpSuccess(urllib2.Request(self.url))
         self.assertEqual(body, 'test')
 
     def test_head(self):
         self.assertHttpErrorCode(404, HeadRequest(self.url))
-        self.webdav.files['/'] = 'test'
+        self.webdav.create_file(self.filename, 'test')
         body = self.assertHttpSuccess(HeadRequest(self.url))
         self.assertEqual(body, '')
 
     def test_delete(self):
+        # delete a non-existing file
         self.assertHttpErrorCode(404, DeleteRequest(self.url))
-        self.webdav.files['/'] = 'test'
+        # delet an existing file
+        self.webdav.create_file(self.filename, 'test')
         body = self.assertHttpSuccess(DeleteRequest(self.url))
         self.assertEqual(body, '')
-        self.assertNotIn('/', self.webdav.files)
+        self.assertFalse(self.webdav.has_file(self.filename))
+        if self.webdav.use_fs:
+            self.assertFalse(os.path.exists(self.filepath))
 
     def test_put(self):
+        # put a non-existing file
         body = self.assertHttpSuccess(PutRequest(self.url, 'test'))
         self.assertEqual(body, '')
-        self.assertEqual(self.webdav.files['/'], 'test')
+        self.assertEqual(self.webdav.get_file(self.filename), 'test')
+        if self.webdav.use_fs:
+            with open(self.filepath) as f:
+                self.assertEqual(f.read(), 'test')
+        # put an existing file
         body = self.assertHttpSuccess(PutRequest(self.url, 'test2'))
         self.assertEqual(body, '')
-        self.assertEqual(self.webdav.files['/'], 'test2')
+        self.assertEqual(self.webdav.get_file(self.filename), 'test2')
+        if self.webdav.use_fs:
+            with open(self.filepath) as f:
+                self.assertEqual(f.read(), 'test2')
+
+
+class WebdavWithoutFsTestCase(WebdavServerTestsMixin, WebdavTestCaseMixin,
+        unittest.TestCase):
+
+    pass
+
+
+class WebdavWithFsTestCase(WebdavServerTestsMixin, WebdavTestCaseMixin,
+        unittest.TestCase):
+
+    use_fs = True
