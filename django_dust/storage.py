@@ -100,7 +100,7 @@ class DistributedStorage(Storage):
 
     def get_available_name(self, name):
         from django_dust import retry_storage # this causes errors when imported at module level
-        while self.exists(name) or list(retry_storage.filter_by_filename(name)):
+        while self.exists(name) or retry_storage.filter_by_filename(name):
             try:
                 dot_index = name.rindex('.')
             except ValueError: # filename has no dot

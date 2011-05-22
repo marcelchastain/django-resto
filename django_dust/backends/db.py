@@ -1,7 +1,4 @@
-from itertools import imap
-
 from django_dust.backends.base import BaseRetryStorage
-
 from django_dust.models import Retry
 
 class RetryStorage(BaseRetryStorage):
@@ -13,7 +10,7 @@ class RetryStorage(BaseRetryStorage):
         return Retry.objects.count()
 
     def all(self):
-        return imap(self._to_dict, Retry.objects.all())
+        return map(self._to_dict, Retry.objects.all())
 
     def create(self, **kwargs):
         for key in kwargs.iterkeys():
@@ -25,7 +22,7 @@ class RetryStorage(BaseRetryStorage):
         Retry.objects.get(pk=retry['id']).delete()
 
     def filter_by_filename(self, filename):
-        return imap(self._to_dict, Retry.objects.filter(filename=filename))
+        return map(self._to_dict, Retry.objects.filter(filename=filename))
 
     def _to_dict(self, instance):
         return dict((field, getattr(instance, field)) for field in self.fields)
