@@ -7,8 +7,8 @@ from django.core.files import base
 from django.core.files.storage import Storage, FileSystemStorage
 from django.conf import settings
 
-from django_dust import http
-from django_dust.settings import getsetting
+from . import http
+from .settings import getsetting
 
 
 class DistributionError(IOError):

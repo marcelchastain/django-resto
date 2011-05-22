@@ -1,7 +1,7 @@
 import httplib2
 from urlparse import urlsplit
 
-from django_dust.settings import getsetting
+from .settings import getsetting
 
 
 class HTTPError(Exception):

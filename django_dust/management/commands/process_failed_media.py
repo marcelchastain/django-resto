@@ -9,9 +9,9 @@ import logging
 
 from django.core.management.base import NoArgsCommand
 
-from django_dust import retry_storage
-from django_dust.storage import DistributedStorage
-from django_dust.http import HTTPError
+from ... import retry_storage
+from ...http import HTTPError
+from ...storage import DistributedStorage
 
 logger = logging.getLogger('django_dust')
 

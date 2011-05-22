@@ -1,5 +1,5 @@
-from django_dust.backends.base import BaseRetryStorage
-from django_dust.models import Retry
+from .base import BaseRetryStorage
+from ..models import Retry
 
 class RetryStorage(BaseRetryStorage):
     """Database storage for the retry queue, using a Django model."""
