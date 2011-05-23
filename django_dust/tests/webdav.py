@@ -63,6 +63,9 @@ class TestWebdavRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         return self.safe(include_content=False)
 
     def do_DELETE(self):
+        if self.server.readonly:
+            self.send_error(500)
+            return
         try:
             self.server.delete_file(self.filename)
         except KeyError:
@@ -71,6 +74,9 @@ class TestWebdavRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.no_content()
 
     def do_PUT(self):
+        if self.server.readonly:
+            self.send_error(500)
+            return
         created = not self.server.has_file(self.filename)
         self.server.create_file(self.filename, self.content)
         self.no_content(201 if created else 204)
@@ -85,8 +91,10 @@ class TestWebdavRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
 class TestWebdavServer(BaseHTTPServer.HTTPServer):
 
-    def __init__(self, host='localhost', port=4080, use_fs=False):
+    def __init__(self, host='localhost', port=4080,
+            readonly=False, use_fs=False):
         self.files = {}
+        self.readonly = readonly
         self.use_fs = use_fs
         BaseHTTPServer.HTTPServer.__init__(self, (host, port),
                 TestWebdavRequestHandler)
@@ -124,19 +132,24 @@ class WebdavTestCaseMixin(object):
 
     host = 'localhost'
     port = 4080
+    readonly = False
     use_fs = False
     filename = 'test.txt'
     url = 'http://%s:%d/%s' % (host, port, filename)
     filepath = os.path.join(settings.MEDIA_ROOT, filename)
 
     def setUp(self):
-        self.webdav = TestWebdavServer(self.host, self.port, self.use_fs)
+        super(WebdavTestCaseMixin, self).setUp()
+        self.webdav = TestWebdavServer(self.host, self.port,
+            readonly=self.readonly, use_fs=self.use_fs)
         self.thread = threading.Thread(target=self.webdav.run)
         self.thread.daemon = True
         self.thread.start()
 
     def tearDown(self):
-        urllib2.urlopen(StopRequest(self.url), timeout=0.1)
+        super(WebdavTestCaseMixin, self).tearDown()
+        if self.thread.is_alive():
+            urllib2.urlopen(StopRequest(self.url), timeout=0.1)
         self.thread.join()
         self.webdav.server_close()
 
@@ -167,13 +180,17 @@ class WebdavServerTestsMixin(object):
     def test_delete(self):
         # delete a non-existing file
         self.assertHttpErrorCode(404, DeleteRequest(self.url))
-        # delet an existing file
+        # delete an existing file
         self.webdav.create_file(self.filename, 'test')
         body = self.assertHttpSuccess(DeleteRequest(self.url))
         self.assertEqual(body, '')
         self.assertFalse(self.webdav.has_file(self.filename))
         if self.webdav.use_fs:
             self.assertFalse(os.path.exists(self.filepath))
+        # attempt to put in read-only mode
+        self.webdav.create_file(self.filename, 'test')
+        self.webdav.readonly = True
+        self.assertHttpErrorCode(500, DeleteRequest(self.url, 'test'))
 
     def test_put(self):
         # put a non-existing file
@@ -190,12 +207,18 @@ class WebdavServerTestsMixin(object):
         if self.webdav.use_fs:
             with open(self.filepath) as f:
                 self.assertEqual(f.read(), 'test2')
+        # attempt to put in read-only mode
+        self.webdav.readonly = True
+        self.assertHttpErrorCode(500, PutRequest(self.url, 'test'))
+
+    def test_tear_down_works_even_if_server_is_stopped(self):
+        self.assertHttpSuccess(StopRequest(self.url))
 
 
 class WebdavWithoutFsTestCase(WebdavServerTestsMixin, WebdavTestCaseMixin,
         unittest.TestCase):
 
-    pass
+    use_fs = False
 
 
 class WebdavWithFsTestCase(WebdavServerTestsMixin, WebdavTestCaseMixin,
