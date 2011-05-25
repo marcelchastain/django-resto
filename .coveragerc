@@ -3,4 +3,5 @@ branch = True
 
 [report]
 exclude_lines =
+    # cover: disable
     raise NotImplementedError
