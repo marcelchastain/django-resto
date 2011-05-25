@@ -1,5 +1,5 @@
-from .api import StorageAPIWithoutLocalStorageTestCase
-from .api import StorageAPIWithLocalStorageTestCase
+from .storage import StorageAPIWithoutLocalStorageTestCase
+from .storage import StorageAPIWithLocalStorageTestCase
 from .http_server import HttpServerWithoutFsTestCase
 from .http_server import HttpServerWithFsTestCase
 from .settings import SettingsTestCase
