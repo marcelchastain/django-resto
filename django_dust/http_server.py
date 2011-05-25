@@ -94,11 +94,9 @@ class TestHttpServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
 class TestHttpServer(BaseHTTPServer.HTTPServer):
 
-    def __init__(self, host='localhost', port=4080,
-            readonly=False, use_fs=False):
+    def __init__(self, host='localhost', port=4080, readonly=False):
         self.files = {}
         self.readonly = readonly
-        self.use_fs = use_fs
         BaseHTTPServer.HTTPServer.__init__(self, (host, port),
                 TestHttpServerRequestHandler)
 
@@ -110,22 +108,11 @@ class TestHttpServer(BaseHTTPServer.HTTPServer):
 
     def create_file(self, name, content):
         self.files[name] = content
-        if self.use_fs:
-            filename = os.path.join(settings.MEDIA_ROOT, name)
-            if not os.path.isdir(os.path.dirname(filename)):
-                os.makedirs(os.path.dirname(filename))
-            with open(filename, 'wb') as f:
-                f.write(content)
 
     def delete_file(self, name):
         del self.files[name]
-        if self.use_fs:
-            filename = os.path.join(settings.MEDIA_ROOT, name)
-            os.unlink(filename)
 
     def run(self):
         self.running = True
         while self.running:
             self.handle_request()
-        if self.use_fs and os.path.isdir(settings.MEDIA_ROOT):
-            shutil.rmtree(settings.MEDIA_ROOT)

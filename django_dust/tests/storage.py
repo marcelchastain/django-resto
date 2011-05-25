@@ -13,7 +13,7 @@ class StorageTestCaseMixin(object):
     def setUp(self):
         super(StorageTestCaseMixin, self).setUp()
         hosts = ['%s:%d' % (self.host, self.port)]
-        self.storage = DistributedStorage(hosts=hosts, use_local=self.use_fs)
+        self.storage = DistributedStorage(hosts=hosts)
 
 class StorageAPIMixin(object):
 

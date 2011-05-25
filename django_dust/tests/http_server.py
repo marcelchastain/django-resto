@@ -15,7 +15,6 @@ class HttpServerTestCaseMixin(object):
     host = 'localhost'
     port = 4080
     readonly = False
-    use_fs = False
     filename = 'test.txt'
     url = 'http://%s:%d/%s' % (host, port, filename)
     filepath = os.path.join(settings.MEDIA_ROOT, filename)
@@ -23,7 +22,7 @@ class HttpServerTestCaseMixin(object):
     def setUp(self):
         super(HttpServerTestCaseMixin, self).setUp()
         self.http_server = TestHttpServer(self.host, self.port,
-            readonly=self.readonly, use_fs=self.use_fs)
+            readonly=self.readonly)
         self.thread = threading.Thread(target=self.http_server.run)
         self.thread.start()
 
@@ -44,7 +43,7 @@ class HttpServerTestCaseMixin(object):
                 'got HTTP %d' % (code, context.exception.code))
 
 
-class HttpServerTestsMixin(object):
+class HttpServerTestCase(HttpServerTestCaseMixin, unittest.TestCase):
 
     def test_get(self):
         self.assertHttpErrorCode(404, GetRequest(self.url))
@@ -66,8 +65,6 @@ class HttpServerTestsMixin(object):
         body = self.assertHttpSuccess(DeleteRequest(self.url))
         self.assertEqual(body, '')
         self.assertFalse(self.http_server.has_file(self.filename))
-        if self.http_server.use_fs:
-            self.assertFalse(os.path.exists(self.filepath))
         # attempt to put in read-only mode
         self.http_server.create_file(self.filename, 'test')
         self.http_server.readonly = True
@@ -78,31 +75,13 @@ class HttpServerTestsMixin(object):
         body = self.assertHttpSuccess(PutRequest(self.url, 'test'))
         self.assertEqual(body, '')
         self.assertEqual(self.http_server.get_file(self.filename), 'test')
-        if self.http_server.use_fs:
-            with open(self.filepath) as f:
-                self.assertEqual(f.read(), 'test')
         # put an existing file
         body = self.assertHttpSuccess(PutRequest(self.url, 'test2'))
         self.assertEqual(body, '')
         self.assertEqual(self.http_server.get_file(self.filename), 'test2')
-        if self.http_server.use_fs:
-            with open(self.filepath) as f:
-                self.assertEqual(f.read(), 'test2')
         # attempt to put in read-only mode
         self.http_server.readonly = True
         self.assertHttpErrorCode(500, PutRequest(self.url, 'test'))
 
     def test_tear_down_works_even_if_server_is_stopped(self):
         self.assertHttpSuccess(StopRequest(self.url))
-
-
-class HttpServerWithoutFsTestCase(HttpServerTestsMixin, HttpServerTestCaseMixin,
-        unittest.TestCase):
-
-    use_fs = False
-
-
-class HttpServerWithFsTestCase(HttpServerTestsMixin, HttpServerTestCaseMixin,
-        unittest.TestCase):
-
-    use_fs = True
