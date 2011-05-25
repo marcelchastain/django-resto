@@ -12,15 +12,11 @@ def getsetting(name, defaults=locals()):
     from django.conf import settings
     return getattr(settings, name, defaults.get(name))
 
-# Retry storage backend setting -- import path for storage module
-# Default is DB backend
-DUST_RETRY_STORAGE_BACKEND = 'django_dust.backends.db'
-
 # Timeout in seconds for accessing hosts over network. Defaults to 2.
 DUST_TIMEOUT = 2
 
 # List of file storage hosts
-DUST_HOSTS = ['127.0.0.1']
+DUST_MEDIA_HOSTS = ['127.0.0.1']
 
 # Whether to use a local file system. If files are stored on those same
 # servers that handle web requests then setting this flag to True

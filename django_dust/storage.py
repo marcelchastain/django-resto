@@ -18,14 +18,14 @@ class DistributionError(IOError):
 class DistributedStorage(Storage):
     '''
     DistributedStorage saves files by copying them on several servers listed
-    in settings.DUST_HOSTS.
+    in settings.DUST_MEDIA_HOSTS.
     '''
     def __init__(self, hosts=None, use_local=None, base_url=settings.MEDIA_URL, **kwargs):
         super(DistributedStorage, self).__init__(**kwargs)
-        if hosts is None:
-            hosts = getsetting('DUST_HOSTS')
+        if hosts is None:                                   # cover: disable
+            hosts = getsetting('DUST_MEDIA_HOSTS')
         self.hosts = hosts
-        if use_local is None:
+        if use_local is None:                               # cover: disable
             use_local = getsetting('DUST_USE_LOCAL_FS')
         self.local_storage = use_local and FileSystemStorage(base_url=base_url, **kwargs)
         self.base_url = base_url
@@ -60,18 +60,13 @@ class DistributedStorage(Storage):
         # All `socket.error` exceptions are not fatal meaning that a host might
         # be temporarily unavailable. Those operations are kept in a queue in
         # database to be retried later.
-        # All other errors mean in most casess misconfigurations and are fatal
+        # All other errors mean in most cases misconfigurations and are fatal
         # for the whole distributed operation.
         for host, result in zip(self.hosts, results):
             if isinstance(result, socket.error):
                 if successful_host is not None:
-                    from django_dust import retry_storage # this causes errors when imported at module level
-                    retry_storage.create(
-                        operation=func.__name__,
-                        target_host=host,
-                        source_host=successful_host,
-                        filename=name,
-                    )
+                    # TODO: retry code removed from here
+                    pass
                 else:
                     exceptions.append(result)
             elif isinstance(result, Exception):
@@ -99,8 +94,7 @@ class DistributedStorage(Storage):
         return name
 
     def get_available_name(self, name):
-        from django_dust import retry_storage # this causes errors when imported at module level
-        while self.exists(name) or retry_storage.filter_by_filename(name):
+        while self.exists(name):
             try:
                 dot_index = name.rindex('.')
             except ValueError: # filename has no dot
@@ -133,6 +127,4 @@ class DistributedStorage(Storage):
         return self.transport.size(random.choice(self.hosts), name)
 
     def url(self, name):
-        if self.base_url is None:
-            raise ValueError("This file is not accessible via a URL.")
-        return urlparse.urljoin(self.base_url, name).replace('\\', '/')
+        return urlparse.urljoin(self.base_url, name.replace('\\', '/'))
