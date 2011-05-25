@@ -1,10 +1,5 @@
 import BaseHTTPServer
-import os
-import os.path
-import shutil
 import urllib2
-
-from django.conf import settings
 
 
 class GetRequest(urllib2.Request):
