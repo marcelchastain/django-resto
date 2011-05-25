@@ -11,6 +11,7 @@ This backend is useful for sites deployed in a multi-server environment, in
 order to accept uploaded files and have them available on all media servers
 immediately for subsequent web requests that could be routed to any machine.
 
+
 ## USE CASES
 
 ### Preliminary warning
@@ -40,8 +41,8 @@ If you have a single application server, you can also store the master copy
 on the application server itself.
 In both cases, `django_dust` replicates uploaded files on all the media servers.
 
-For the media servers, serving the files from the local filesystem is more efficient than serving them from a NAS or a SAN. Also, it means that they
-don't depend on the NAS or SAN.
+For the media servers, serving the files from the local filesystem is more efficient than serving them from a NAS or a SAN. This is the main advantage
+of `django_dust`. Also, it means that they don't depend on the NAS or SAN.
 
 ### Keeping media directories synchronized
 
@@ -54,10 +55,10 @@ re-synchronize the contents of `MEDIA_ROOT` from the master copy with `rsync`.
 You can also set up a cron if you get random failures, for instance during
 load peaks.
 
-`django_dust` used to keep a queue of failed operations to repeat them
-afterwards. This is inherently prone to data loss, because the order of PUT
-and DELETE operations matters, and retrying failed operations later breaks
-the order. So, use `rsync` instead, it's fast enough.
+_`django_dust` used to keep a queue of failed operations to repeat them
+afterwards. This is inherently prone to data loss, because the order of `PUT`
+and `DELETE` operations matters, and retrying failed operations later breaks
+the order. So, use `rsync` instead, it's fast enough._
 
 ### Low concurrency situations
 
@@ -73,6 +74,7 @@ This trade-off has two consequences:
 - Race conditions become possible: if two people upload different files with
   the same name at the same time, you may randomly end up with one file or the
   other on each media server.
+
 
 ## SETTINGS
 
@@ -136,22 +138,23 @@ that all uploads run in parallel.
 
 6.  Set up your media servers to enable file uploads.
 
+
 ## CONFIGURING THE MEDIA SERVERS
 
 The backend uses HTTP to transfer files to media servers. The HTTP server must
-support the PUT and DELETE methods according to RFC 2616.
+support the `PUT` and `DELETE` methods according to RFC 2616.
 
 In practice, these methods are often provided by an external module that
 implements WebDAV (RFC 2518). Unfortunately, WebDAV adds the concept of
-"collections" and changes the specification of the PUT methods, making it
-necessary to create a collection with MKCOL before creating a resource with
-PUT inside. Currently, `django_dust` requires a server that just implements
+"collections" and changes the specification of the `PUT` methods, making it
+necessary to create a collection with `MKCOL` before creating a resource with
+`PUT`. Currently, `django_dust` requires a server that just implements
 HTTP/1.1 (RFC 2616).
 
-For security reasons it's critical to enable file uploads only from trusted
-IPs to prevent external users from writing or deleting files.
+**It's critical to enable file uploads only from trusted IPs.** Otherwise,
+anyone could write or delete files on your media servers.
 
-An example of lighttpd config:
+Here is an example of lighttpd config:
 
     server.modules += (
       "mod_webdav",
@@ -161,7 +164,8 @@ An example of lighttpd config:
       "webdav.activate = "enable"
     }
 
-An example of nginx config, assuming it was compiled `--with-http_dav_module`:
+Here is an example of nginx config, assuming the server was compiled
+`--with-http_dav_module`:
 
     server {
         listen 192.168.0.10;
