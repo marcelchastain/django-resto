@@ -1,25 +1,21 @@
-'''
-Default values for settings.
-If you want to change these settings define them in your project's settings
-file.
-'''
+"""Default settings for django_dust.
 
-def getsetting(name, defaults=locals()):
-    '''
-    Tries to get a setting from Django's default settings object. If not
-    available returns a local default.
-    '''
-    from django.conf import settings
-    return getattr(settings, name, defaults.get(name))
+Override them in the settings file of your project.
 
-# Timeout in seconds for accessing hosts over network. Defaults to 2.
+See the README for more information on the settings.
+"""
+
+from django.conf import settings
+
+
+def get_setting(name):
+    # raise a KeyError if we have no such setting
+    default = globals()['DUST_%s' % name]
+    return getattr(settings, name, default)
+
+
 DUST_TIMEOUT = 2
 
-# List of file storage hosts
-DUST_MEDIA_HOSTS = ['127.0.0.1']
+DUST_MEDIA_HOSTS = ()
 
-# Whether to use a local file system. If files are stored on those same
-# servers that handle web requests then setting this flag to True
-# allows django_dust to access files locally saving time and bandwidth
-# on existence checking operations. Defaults to False.
-DUST_USE_LOCAL_FS = False
+DUST_USE_LOCAL_FS = True

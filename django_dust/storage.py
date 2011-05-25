@@ -8,7 +8,7 @@ from django.core.files.storage import Storage, FileSystemStorage
 from django.conf import settings
 
 from . import http
-from .settings import getsetting
+from .settings import get_setting
 
 
 class DistributionError(IOError):
@@ -23,10 +23,10 @@ class DistributedStorage(Storage):
     def __init__(self, hosts=None, use_local=None, base_url=settings.MEDIA_URL, **kwargs):
         super(DistributedStorage, self).__init__(**kwargs)
         if hosts is None:                                   # cover: disable
-            hosts = getsetting('DUST_MEDIA_HOSTS')
+            hosts = get_setting('MEDIA_HOSTS')
         self.hosts = hosts
         if use_local is None:                               # cover: disable
-            use_local = getsetting('DUST_USE_LOCAL_FS')
+            use_local = get_setting('USE_LOCAL_FS')
         self.local_storage = use_local and FileSystemStorage(base_url=base_url, **kwargs)
         self.base_url = base_url
         self.transport = http.HTTPTransport(base_url=base_url)

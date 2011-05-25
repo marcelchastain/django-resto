@@ -1,7 +1,7 @@
 import httplib2
 from urlparse import urlsplit
 
-from .settings import getsetting
+from .settings import get_setting
 
 
 class HTTPError(Exception):
@@ -14,7 +14,7 @@ class HTTPTransport(object):
     Uses httplib2 and expects that target HTTP host support PUT and DELETE
     methods (apart from the all usual).
     '''
-    timeout = getsetting('DUST_TIMEOUT')
+    timeout = get_setting('TIMEOUT')
 
     def __init__(self, base_url):
         scheme, host, path, query, fragment = urlsplit(base_url)

@@ -76,6 +76,8 @@ This trade-off has two consequences:
 - Race conditions become possible: if two people upload different files with
   the same name at the same time, you may randomly end up with one file or the
   other on each media server.
+- Checking if a file exists becomes more expensive, since it requires an HTTP
+  request.
 
 
 ## Settings
