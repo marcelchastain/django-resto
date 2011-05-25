@@ -2,7 +2,7 @@ from distutils.core import setup
 import os.path
 
 with open(os.path.join(os.path.dirname(__file__), 'README.md')) as f:
-    long_description = f.read().partition('\n\n\n')[0].partition('\n\n')[2]
+    long_description = '\n\n'.join(f.read().split('\n\n')[2:5])
 
 setup(
     name='django_dust',

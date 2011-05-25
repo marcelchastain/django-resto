@@ -1,4 +1,6 @@
-## SUMMARY
+# README for `django_dust`
+
+## Introduction
 
 File storage backend `django_dust` (Distributed Upload STorage) can store
 files coming into a Django site on several servers simultaneously, using HTTP.
@@ -12,7 +14,7 @@ order to accept uploaded files and have them available on all media servers
 immediately for subsequent web requests that could be routed to any machine.
 
 
-## USE CASES
+## Use cases
 
 ### Preliminary warning
 
@@ -76,7 +78,7 @@ This trade-off has two consequences:
   other on each media server.
 
 
-## SETTINGS
+## Settings
 
 ### `DUST_MEDIA_HOSTS`
 
@@ -108,7 +110,7 @@ This controls the maximum amount of time an upload operation can take. Note
 that all uploads run in parallel.
 
 
-## INSTALLATION AND SETUP
+## Installation and setup
 
 1.  Download and install the package from PyPI:
 
@@ -139,7 +141,7 @@ that all uploads run in parallel.
 6.  Set up your media servers to enable file uploads.
 
 
-## CONFIGURING THE MEDIA SERVERS
+## Configuring the media servers
 
 The backend uses HTTP to transfer files to media servers. The HTTP server must
 support the `PUT` and `DELETE` methods according to RFC 2616.
