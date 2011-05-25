@@ -6,11 +6,11 @@ import urllib2
 from django.conf import settings
 from django.utils import unittest
 
-from ..webdav import GetRequest, HeadRequest, DeleteRequest, \
-        PutRequest, StopRequest, TestWebdavServer
+from ..http_server import GetRequest, HeadRequest, DeleteRequest, \
+        PutRequest, StopRequest, TestHttpServerServer
 
 
-class WebdavTestCaseMixin(object):
+class HttpServerTestCaseMixin(object):
 
     host = 'localhost'
     port = 4080
@@ -21,14 +21,14 @@ class WebdavTestCaseMixin(object):
     filepath = os.path.join(settings.MEDIA_ROOT, filename)
 
     def setUp(self):
-        super(WebdavTestCaseMixin, self).setUp()
-        self.webdav = TestWebdavServer(self.host, self.port,
+        super(HttpServerTestCaseMixin, self).setUp()
+        self.webdav = TestHttpServerServer(self.host, self.port,
             readonly=self.readonly, use_fs=self.use_fs)
         self.thread = threading.Thread(target=self.webdav.run)
         self.thread.start()
 
     def tearDown(self):
-        super(WebdavTestCaseMixin, self).tearDown()
+        super(HttpServerTestCaseMixin, self).tearDown()
         if self.thread.is_alive():
             urllib2.urlopen(StopRequest(self.url), timeout=0.1)
         self.thread.join()
@@ -44,7 +44,7 @@ class WebdavTestCaseMixin(object):
                 'got HTTP %d' % (code, context.exception.code))
 
 
-class WebdavServerTestsMixin(object):
+class HttpServerServerTestsMixin(object):
 
     def test_get(self):
         self.assertHttpErrorCode(404, GetRequest(self.url))
@@ -96,13 +96,13 @@ class WebdavServerTestsMixin(object):
         self.assertHttpSuccess(StopRequest(self.url))
 
 
-class WebdavWithoutFsTestCase(WebdavServerTestsMixin, WebdavTestCaseMixin,
+class HttpServerWithoutFsTestCase(HttpServerServerTestsMixin, HttpServerTestCaseMixin,
         unittest.TestCase):
 
     use_fs = False
 
 
-class WebdavWithFsTestCase(WebdavServerTestsMixin, WebdavTestCaseMixin,
+class HttpServerWithFsTestCase(HttpServerServerTestsMixin, HttpServerTestCaseMixin,
         unittest.TestCase):
 
     use_fs = True

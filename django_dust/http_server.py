@@ -32,7 +32,7 @@ class StopRequest(urllib2.Request):
         return 'STOP'
 
 
-class TestWebdavRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+class TestHttpServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     @property
     def filename(self):
@@ -92,7 +92,7 @@ class TestWebdavRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         pass    # disable logging
 
 
-class TestWebdavServer(BaseHTTPServer.HTTPServer):
+class TestHttpServerServer(BaseHTTPServer.HTTPServer):
 
     def __init__(self, host='localhost', port=4080,
             readonly=False, use_fs=False):
@@ -100,7 +100,7 @@ class TestWebdavServer(BaseHTTPServer.HTTPServer):
         self.readonly = readonly
         self.use_fs = use_fs
         BaseHTTPServer.HTTPServer.__init__(self, (host, port),
-                TestWebdavRequestHandler)
+                TestHttpServerRequestHandler)
 
     def has_file(self, name):
         return name in self.files

@@ -5,7 +5,7 @@ from django.core.files.base import ContentFile
 from django.utils import unittest
 
 from ..storage import DistributedStorage
-from .webdav import WebdavTestCaseMixin
+from .http_server import HttpServerTestCaseMixin
 
 
 class StorageTestCaseMixin(object):
@@ -93,7 +93,7 @@ class StorageAPIMixin(object):
 
 
 class StorageAPIWithoutLocalStorageTestCase(StorageAPIMixin,
-        StorageTestCaseMixin, WebdavTestCaseMixin, unittest.TestCase):
+        StorageTestCaseMixin, HttpServerTestCaseMixin, unittest.TestCase):
 
     def test_listdir(self):
         self.assertRaises(NotImplementedError, self.storage.listdir, 'test')
@@ -103,6 +103,6 @@ class StorageAPIWithoutLocalStorageTestCase(StorageAPIMixin,
 
 
 class StorageAPIWithLocalStorageTestCase(StorageAPIMixin,
-        StorageTestCaseMixin, WebdavTestCaseMixin, unittest.TestCase):
+        StorageTestCaseMixin, HttpServerTestCaseMixin, unittest.TestCase):
 
     use_fs = True

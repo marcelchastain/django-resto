@@ -1,4 +1,4 @@
 from .api import StorageAPIWithoutLocalStorageTestCase
 from .api import StorageAPIWithLocalStorageTestCase
-from .webdav import WebdavWithoutFsTestCase
-from .webdav import WebdavWithFsTestCase
+from .http_server import HttpServerWithoutFsTestCase
+from .http_server import HttpServerWithFsTestCase

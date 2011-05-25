@@ -1,8 +1,7 @@
 ## SUMMARY
 
 File storage backend `django_dust` (Distributed Upload STorage) can store
-files coming into a Django site on several servers simultaneously, using
-WebDAV.
+files coming into a Django site on several servers simultaneously, using HTTP.
 
 This works for files uploaded by users through the admin or through custom
 Django forms, and also for files created by the application code, provided it
@@ -83,9 +82,9 @@ Default: `()`
 
 List of host names for the media servers.
 
-The WebDAV URL for a given media file is the same as its HTTP URLs, built
-using `MEDIA_URL`, except that the host name changes. It is not possible to
-use HTTPS.
+The URL used to upload or delete a given media file is built using
+`MEDIA_URL`. It is the same URL used by the end user to download the file,
+except that the host name changes. It is not possible to use HTTPS.
 
 ### `DUST_USE_LOCAL_FS`
 
@@ -101,7 +100,7 @@ See "Low concurrency situations" above.
 
 Default: `2`
 
-Timeout in seconds for WebDAV operations.
+Timeout in seconds for HTTP operations.
 
 This controls the maximum amount of time an upload operation can take. Note
 that all uploads run in parallel.
@@ -135,16 +134,22 @@ that all uploads run in parallel.
 
 5.  Make sure you have configured `MEDIA_ROOT` and `MEDIA_URL`.
 
-6.  Set up WebDAV on your media servers.
+6.  Set up your media servers to enable file uploads.
 
-## SETTING UP WEBDAV ON THE MEDIA SERVERS
+## CONFIGURING THE MEDIA SERVERS
 
-The backend uses WebDAV to transfer files to media servers. It requires that
-those servers support the PUT and DELETE (TODO: and MKCOL?). Despite of them
-being part of HTTP itself they are traditionally implemented by external
-modules supporting WebDAV. Hence make sure that  web servers have this module
-enabled. For security reasons it's critical to enable it only for internal IPs
-to prevent external users from being able to write and delete server files.
+The backend uses HTTP to transfer files to media servers. The HTTP server must
+support the PUT and DELETE methods according to RFC 2616.
+
+In practice, these methods are often provided by an external module that
+implements WebDAV (RFC 2518). Unfortunately, WebDAV adds the concept of
+"collections" and changes the specification of the PUT methods, making it
+necessary to create a collection with MKCOL before creating a resource with
+PUT inside. Currently, `django_dust` requires a server that just implements
+HTTP/1.1 (RFC 2616).
+
+For security reasons it's critical to enable file uploads only from trusted
+IPs to prevent external users from writing or deleting files.
 
 An example of lighttpd config:
 
