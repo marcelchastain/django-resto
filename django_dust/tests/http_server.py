@@ -7,7 +7,7 @@ from django.conf import settings
 from django.utils import unittest
 
 from ..http_server import GetRequest, HeadRequest, DeleteRequest, \
-        PutRequest, StopRequest, TestHttpServerServer
+        PutRequest, StopRequest, TestHttpServer
 
 
 class HttpServerTestCaseMixin(object):
@@ -22,9 +22,9 @@ class HttpServerTestCaseMixin(object):
 
     def setUp(self):
         super(HttpServerTestCaseMixin, self).setUp()
-        self.webdav = TestHttpServerServer(self.host, self.port,
+        self.http_server = TestHttpServer(self.host, self.port,
             readonly=self.readonly, use_fs=self.use_fs)
-        self.thread = threading.Thread(target=self.webdav.run)
+        self.thread = threading.Thread(target=self.http_server.run)
         self.thread.start()
 
     def tearDown(self):
@@ -32,7 +32,7 @@ class HttpServerTestCaseMixin(object):
         if self.thread.is_alive():
             urllib2.urlopen(StopRequest(self.url), timeout=0.1)
         self.thread.join()
-        self.webdav.server_close()
+        self.http_server.server_close()
 
     def assertHttpSuccess(self, *args):
         return urllib2.urlopen(*args).read()    # urllib2.URLError not raised.
@@ -44,17 +44,17 @@ class HttpServerTestCaseMixin(object):
                 'got HTTP %d' % (code, context.exception.code))
 
 
-class HttpServerServerTestsMixin(object):
+class HttpServerTestsMixin(object):
 
     def test_get(self):
         self.assertHttpErrorCode(404, GetRequest(self.url))
-        self.webdav.create_file(self.filename, 'test')
+        self.http_server.create_file(self.filename, 'test')
         body = self.assertHttpSuccess(GetRequest(self.url))
         self.assertEqual(body, 'test')
 
     def test_head(self):
         self.assertHttpErrorCode(404, HeadRequest(self.url))
-        self.webdav.create_file(self.filename, 'test')
+        self.http_server.create_file(self.filename, 'test')
         body = self.assertHttpSuccess(HeadRequest(self.url))
         self.assertEqual(body, '')
 
@@ -62,47 +62,47 @@ class HttpServerServerTestsMixin(object):
         # delete a non-existing file
         self.assertHttpErrorCode(404, DeleteRequest(self.url))
         # delete an existing file
-        self.webdav.create_file(self.filename, 'test')
+        self.http_server.create_file(self.filename, 'test')
         body = self.assertHttpSuccess(DeleteRequest(self.url))
         self.assertEqual(body, '')
-        self.assertFalse(self.webdav.has_file(self.filename))
-        if self.webdav.use_fs:
+        self.assertFalse(self.http_server.has_file(self.filename))
+        if self.http_server.use_fs:
             self.assertFalse(os.path.exists(self.filepath))
         # attempt to put in read-only mode
-        self.webdav.create_file(self.filename, 'test')
-        self.webdav.readonly = True
+        self.http_server.create_file(self.filename, 'test')
+        self.http_server.readonly = True
         self.assertHttpErrorCode(500, DeleteRequest(self.url, 'test'))
 
     def test_put(self):
         # put a non-existing file
         body = self.assertHttpSuccess(PutRequest(self.url, 'test'))
         self.assertEqual(body, '')
-        self.assertEqual(self.webdav.get_file(self.filename), 'test')
-        if self.webdav.use_fs:
+        self.assertEqual(self.http_server.get_file(self.filename), 'test')
+        if self.http_server.use_fs:
             with open(self.filepath) as f:
                 self.assertEqual(f.read(), 'test')
         # put an existing file
         body = self.assertHttpSuccess(PutRequest(self.url, 'test2'))
         self.assertEqual(body, '')
-        self.assertEqual(self.webdav.get_file(self.filename), 'test2')
-        if self.webdav.use_fs:
+        self.assertEqual(self.http_server.get_file(self.filename), 'test2')
+        if self.http_server.use_fs:
             with open(self.filepath) as f:
                 self.assertEqual(f.read(), 'test2')
         # attempt to put in read-only mode
-        self.webdav.readonly = True
+        self.http_server.readonly = True
         self.assertHttpErrorCode(500, PutRequest(self.url, 'test'))
 
     def test_tear_down_works_even_if_server_is_stopped(self):
         self.assertHttpSuccess(StopRequest(self.url))
 
 
-class HttpServerWithoutFsTestCase(HttpServerServerTestsMixin, HttpServerTestCaseMixin,
+class HttpServerWithoutFsTestCase(HttpServerTestsMixin, HttpServerTestCaseMixin,
         unittest.TestCase):
 
     use_fs = False
 
 
-class HttpServerWithFsTestCase(HttpServerServerTestsMixin, HttpServerTestCaseMixin,
+class HttpServerWithFsTestCase(HttpServerTestsMixin, HttpServerTestCaseMixin,
         unittest.TestCase):
 
     use_fs = True

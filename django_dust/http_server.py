@@ -55,7 +55,7 @@ class TestHttpServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 self.wfile.write(content)
 
     def no_content(self, code=204):
-        self.send_response(204)
+        self.send_response(code)
         self.send_header('Content-Length', 0)
         self.end_headers()
 
@@ -92,7 +92,7 @@ class TestHttpServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         pass    # disable logging
 
 
-class TestHttpServerServer(BaseHTTPServer.HTTPServer):
+class TestHttpServer(BaseHTTPServer.HTTPServer):
 
     def __init__(self, host='localhost', port=4080,
             readonly=False, use_fs=False):

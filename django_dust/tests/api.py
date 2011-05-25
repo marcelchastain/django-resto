@@ -31,31 +31,31 @@ class StorageAPIMixin(object):
                 self.storage.created_time, 'test.txt')
 
     def test_delete(self):
-        self.webdav.create_file('test.txt', 'test')
-        self.assertTrue(self.webdav.has_file('test.txt'))
+        self.http_server.create_file('test.txt', 'test')
+        self.assertTrue(self.http_server.has_file('test.txt'))
         self.storage.delete('test.txt')
-        self.assertFalse(self.webdav.has_file('test.txt'))
+        self.assertFalse(self.http_server.has_file('test.txt'))
         # deleting a file that doesn't exist doesn't raise an exception
         self.storage.delete('test.txt')
-        self.assertFalse(self.webdav.has_file('test.txt'))
+        self.assertFalse(self.http_server.has_file('test.txt'))
 
     def test_exists(self):
         self.assertFalse(self.storage.exists('test.txt'))
-        self.webdav.create_file('test.txt', 'test')
+        self.http_server.create_file('test.txt', 'test')
         self.assertTrue(self.storage.exists('test.txt'))
 
     def test_get_available_name(self):
         self.assertEqual(self.storage.get_available_name('test.txt'), 'test.txt')
-        self.webdav.create_file('test.txt', 'test')
+        self.http_server.create_file('test.txt', 'test')
         self.assertEqual(self.storage.get_available_name('test.txt'), 'test_.txt')
 
     def test_get_valid_name(self):
         self.assertEqual(self.storage.get_valid_name('test.txt'), 'test.txt')
 
     def test_listdir(self):
-        self.webdav.create_file('test/foo.txt', 'foo')
-        self.webdav.create_file('test/bar.txt', 'bar')
-        self.webdav.create_file('test/baz/quux.txt', 'quux')
+        self.http_server.create_file('test/foo.txt', 'foo')
+        self.http_server.create_file('test/bar.txt', 'bar')
+        self.http_server.create_file('test/baz/quux.txt', 'quux')
         listing = self.storage.listdir('test')
         self.assertEqual(set(listing[0]), set(['baz']))
         self.assertEqual(set(listing[1]), set(['foo.txt', 'bar.txt']))
@@ -65,29 +65,29 @@ class StorageAPIMixin(object):
                 self.storage.modified_time, 'test.txt')
 
     def test_open(self):
-        self.webdav.create_file('test.txt', 'test')
+        self.http_server.create_file('test.txt', 'test')
         with self.storage.open('test.txt') as f:
             self.assertEqual(f.read(), 'test')
 
     def test_path(self):
-        self.webdav.create_file('test.txt', 'test')
+        self.http_server.create_file('test.txt', 'test')
         self.assertEqual(self.storage.path('test.txt'),
                          os.path.join(settings.MEDIA_ROOT, 'test.txt'))
 
     def test_save(self):
         filename = self.storage.save('test.txt', ContentFile('test'))
         self.assertEqual(filename, 'test.txt')
-        self.assertEqual(self.webdav.get_file('test.txt'), 'test')
+        self.assertEqual(self.http_server.get_file('test.txt'), 'test')
         filename = self.storage.save('test.txt', ContentFile('test2'))
         self.assertEqual(filename, 'test_.txt')
-        self.assertEqual(self.webdav.get_file('test_.txt'), 'test2')
+        self.assertEqual(self.http_server.get_file('test_.txt'), 'test2')
 
     def test_size(self):
-        self.webdav.create_file('test.txt', 'test')
+        self.http_server.create_file('test.txt', 'test')
         self.assertEqual(self.storage.size('test.txt'), 4)
 
     def test_url(self):
-        self.webdav.create_file('test.txt', 'test')
+        self.http_server.create_file('test.txt', 'test')
         self.assertEqual(self.storage.url('test.txt'),
                 'http://media.example.com/test.txt')
 
