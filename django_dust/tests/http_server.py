@@ -24,6 +24,7 @@ class HttpServerTestCaseMixin(object):
         self.http_server = TestHttpServer(self.host, self.port,
             readonly=self.readonly)
         self.thread = threading.Thread(target=self.http_server.run)
+        self.thread.daemon = True
         self.thread.start()
 
     def tearDown(self):
