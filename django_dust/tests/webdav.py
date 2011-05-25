@@ -143,7 +143,6 @@ class WebdavTestCaseMixin(object):
         self.webdav = TestWebdavServer(self.host, self.port,
             readonly=self.readonly, use_fs=self.use_fs)
         self.thread = threading.Thread(target=self.webdav.run)
-        self.thread.daemon = True
         self.thread.start()
 
     def tearDown(self):

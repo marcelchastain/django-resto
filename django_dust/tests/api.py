@@ -8,12 +8,14 @@ from ..storage import DistributedStorage
 from .webdav import WebdavTestCaseMixin
 
 
-class StorageAPIMixin(object):
+class StorageTestCaseMixin(object):
 
     def setUp(self):
-        super(StorageAPIMixin, self).setUp()
+        super(StorageTestCaseMixin, self).setUp()
         hosts = ['%s:%d' % (self.host, self.port)]
         self.storage = DistributedStorage(hosts=hosts, use_local=self.use_fs)
+
+class StorageAPIMixin(object):
 
     # See http://docs.djangoproject.com/en/dev/ref/files/storage/
     # for the full storage API.
@@ -90,8 +92,8 @@ class StorageAPIMixin(object):
                 'http://media.example.com/test.txt')
 
 
-class StorageAPIWithoutLocalStorageTestCase(
-        StorageAPIMixin, WebdavTestCaseMixin, unittest.TestCase):
+class StorageAPIWithoutLocalStorageTestCase(StorageAPIMixin,
+        StorageTestCaseMixin, WebdavTestCaseMixin, unittest.TestCase):
 
     def test_listdir(self):
         self.assertRaises(NotImplementedError, self.storage.listdir, 'test')
@@ -100,7 +102,7 @@ class StorageAPIWithoutLocalStorageTestCase(
         self.assertRaises(NotImplementedError, self.storage.path, 'test.txt')
 
 
-class StorageAPIWithLocalStorageTestCase(
-        StorageAPIMixin, WebdavTestCaseMixin, unittest.TestCase):
+class StorageAPIWithLocalStorageTestCase(StorageAPIMixin,
+        StorageTestCaseMixin, WebdavTestCaseMixin, unittest.TestCase):
 
     use_fs = True
