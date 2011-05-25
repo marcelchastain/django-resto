@@ -2,14 +2,16 @@
 
 ## Introduction
 
-File storage backend `django_dust` (Distributed Upload STorage) can store
-files coming into a Django site on several servers simultaneously, using HTTP.
+`django_dust` (Distributed Upload STorage) provides file storage backends that
+can store files coming into a Django site on several servers simultaneously,
+using HTTP. `HybridStorage` will store the files locally on the filesystem
+and remotely, while `DistributedStorage` will only store them remotely.
 
 This works for files uploaded by users through the admin or through custom
 Django forms, and also for files created by the application code, provided it
 uses the standard [storage API][1].
 
-This backend is useful for sites deployed in a multi-server environment, in
+`django_dust` is useful for sites deployed in a multi-server environment, in
 order to accept uploaded files and have them available on all media servers
 immediately for subsequent web requests that could be routed to any machine.
 
@@ -19,10 +21,9 @@ immediately for subsequent web requests that could be routed to any machine.
 ### Preliminary warning
 
 Django's built-in `FileSystemStorage` goes to great lengths to avoid race
-conditions. It is difficult for `django_dust`'s `DistributedStorage` to
-provide the same guarantees, because of the [CAP theorem][2]. For this reason,
-`django_dust` uses a master copy and is designed to obtain eventual
-consistency on the media servers.
+conditions. It is difficult for `django_dust` to provide the same guarantees,
+because of the [CAP theorem][2]. The limitation of its storage backends with
+regard to data consistency are explained below. Read them carefully.
 
 ### Recommended setup
 
@@ -40,8 +41,8 @@ of the following roles:
 If you have several application servers, you should store a master copy of
 your media files on a NAS or a SAN attached to all your application servers.
 If you have a single application server, you can also store the master copy
-on the application server itself.
-In both cases, `django_dust` replicates uploaded files on all the media servers.
+on the application server itself. In both cases, use `HybridStorage` to
+replicate uploaded files on all the media servers.
 
 For the media servers, serving the files from the local filesystem is more efficient than serving them from a NAS or a SAN. This is the main advantage
 of `django_dust`. Also, it means that they don't depend on the NAS or SAN.
@@ -55,7 +56,7 @@ If a media server is unavailable, `django_dust` will log a message at level
 `ERROR` for each failed upload. Once the server is back online, you can
 re-synchronize the contents of `MEDIA_ROOT` from the master copy with `rsync`.
 You can also set up a cron if you get random failures, for instance during
-load peaks.
+load peaks. This provides eventual consistency.
 
 _`django_dust` used to keep a queue of failed operations to repeat them
 afterwards. This is inherently prone to data loss, because the order of `PUT`
@@ -67,7 +68,7 @@ the order. So, use `rsync` instead, it's fast enough._
 You may have several servers for high availability, but still expect a low
 concurrency on write operations. This is a common pattern for editorial
 websites. In such circumstances, you can decide not to store a master copy of
-your media files on the application server. See `DUST_USE_LOCAL_FS` below.
+your media files on the application server, by using `DistributedStorage`.
 
 This trade-off has two consequences:
 
@@ -80,39 +81,9 @@ This trade-off has two consequences:
   request.
 
 
-## Settings
+## Setup
 
-### `DUST_MEDIA_HOSTS`
-
-Default: `()`
-
-List of host names for the media servers.
-
-The URL used to upload or delete a given media file is built using
-`MEDIA_URL`. It is the same URL used by the end user to download the file,
-except that the host name changes. It is not possible to use HTTPS.
-
-### `DUST_USE_LOCAL_FS`
-
-Default: `True`
-
-When `True`, `django_dust` will run all file storage operations on
-`MEDIA_ROOT` first, then replicate them to the media servers.
-
-When `False`, `django_dust` will only store the files on the media servers.
-See "Low concurrency situations" above.
-
-### `DUST_TIMEOUT`
-
-Default: `2`
-
-Timeout in seconds for HTTP operations.
-
-This controls the maximum amount of time an upload operation can take. Note
-that all uploads run in parallel.
-
-
-## Installation and setup
+### Installation guide
 
 1.  Download and install the package from PyPI:
 
@@ -124,12 +95,11 @@ that all uploads run in parallel.
 
         INSTALLED_APPS += 'django_dust',
 
-3.  Set `django_dust` as a default file backend, if you want all your models
-    to use it:
+3.  Set a default file backend, if you want all your models to use it:
 
-        DEFAULT_FILE_STORAGE = 'django_dust.storage.DistributedStorage'
+        DEFAULT_FILE_STORAGE = 'django_dust.storage.HybridStorage'
 
-    This is optional. You can also enable this backend only for some
+    This is optional. You can also enable a backend only for selected
     fields in your models.
 
 4.  Define the list of your media servers:
@@ -141,6 +111,41 @@ that all uploads run in parallel.
 5.  Make sure you have configured `MEDIA_ROOT` and `MEDIA_URL`.
 
 6.  Set up your media servers to enable file uploads.
+
+### Backends
+
+`django_dust` defines two backends in `django_dust.storage`.
+
+#### `HybridStorage`
+
+With this backend, `django_dust` will run all file storage operations on
+`MEDIA_ROOT` first, then replicate them to the media servers.
+
+#### `DistributedStorage`
+
+With this backend, `django_dust` will only store the files on the media
+servers. See "Low concurrency situations" above.
+
+### Settings
+
+#### `DUST_MEDIA_HOSTS`
+
+Default: `()`
+
+List of host names for the media servers.
+
+The URL used to upload or delete a given media file is built using
+`MEDIA_URL`. It is the same URL used by the end user to download the file,
+except that the host name changes. It is not possible to use HTTPS.
+
+#### `DUST_TIMEOUT`
+
+Default: `2`
+
+Timeout in seconds for HTTP operations.
+
+This controls the maximum amount of time an upload operation can take. Note
+that all uploads run in parallel.
 
 
 ## Configuring the media servers

@@ -17,5 +17,3 @@ def get_setting(name):
 DUST_TIMEOUT = 2
 
 DUST_MEDIA_HOSTS = ()
-
-DUST_USE_LOCAL_FS = True
