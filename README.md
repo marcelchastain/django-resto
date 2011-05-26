@@ -155,14 +155,6 @@ servers. See "Low concurrency situations" above.
 
 ### Settings
 
-#### `DUST_FATAL_EXCEPTIONS`
-
-Default: `True`
-
-Whether to throw an exception when an operation fails on a media server.
-
-Failed operations are always logged.
-
 #### `DUST_MEDIA_HOSTS`
 
 Default: `()`
@@ -172,6 +164,20 @@ List of host names for the media servers.
 The URL used to upload or delete a given media file is built using
 `MEDIA_URL`. It is the same URL used by the end user to download the file,
 except that the host name changes. It isn't possible to use HTTPS.
+
+#### `DUST_FATAL_EXCEPTIONS`
+
+Default: `True`
+
+Whether to throw an exception when an operation fails on a media server.
+
+Failed operations are always logged.
+
+#### `DUST_SHOW_TRACEBACK`
+
+Default: `False`
+
+Whether to include a traceback when logging an exception during an operation.
 
 #### `DUST_TIMEOUT`
 

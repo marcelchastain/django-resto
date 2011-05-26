@@ -17,3 +17,7 @@ def get_setting(name):
 DUST_TIMEOUT = 2
 
 DUST_MEDIA_HOSTS = ()
+
+DUST_FATAL_EXCEPTIONS = ()
+
+DUST_SHOW_TRACEBACK = False

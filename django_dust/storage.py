@@ -1,3 +1,4 @@
+import logging
 import random
 import threading
 import urllib2
@@ -9,6 +10,9 @@ from django.core.files.storage import Storage, FileSystemStorage
 from django.utils.encoding import filepath_to_uri
 
 from .settings import get_setting
+
+
+logger = logging.getLogger(__name__)
 
 
 class UnexpectedStatusCode(urllib2.HTTPError):
@@ -60,6 +64,7 @@ class DefaultTransport(object):
     This transport expects that the target HTTP hosts implements the GET,
     HEAD, PUT and DELETE methods according to RFC2616.
     """
+
     timeout = get_setting('TIMEOUT')
 
     def __init__(self, base_url):
@@ -158,6 +163,9 @@ class DistributedStorageMixin(object):
 
     """Mixin for storage backends that distribute files on several servers."""
 
+    fatal_exceptions = get_setting('FATAL_EXCEPTIONS')
+    exc_info = get_setting('SHOW_TRACEBACK')
+
     def __init__(self, hosts=None, base_url=None):
         if hosts is None:                                   # cover: disable
             hosts = get_setting('MEDIA_HOSTS')
@@ -167,27 +175,26 @@ class DistributedStorageMixin(object):
         self.base_url = base_url
         self.transport = DefaultTransport(base_url=self.base_url)
 
-    def execute_parallel(self, func, *args):
-        """Run an action over several hosts in parallel.
-
-        For each host, this will call func(host, *args).
-        """
+    def execute_parallel(self, func, url, *extra):
+        """Run an action over several hosts in parallel."""
         exceptions = {}
         def execute_one(host):
             try:
-                func(host, *args)
+                func(host, url, *extra)
             except Exception, exc:
                 exceptions[host] = exc
 
-        threads = [threading.Thread(target=execute_one, args=(host,)) for host in self.hosts]
+        threads = [threading.Thread(target=execute_one, args=(host,))
+                for host in self.hosts]
         for thread in threads:
             thread.start()
         for thread in threads:
             thread.join()
 
-        for exception in exceptions:
-            # TODO logging
-            pass
+        for host, exception in exceptions.iteritems():
+            url = args[0]
+            logger.error("Failed to %s %s on %s.", func.func_name, url, host,
+                exc_info=self.exc_info)
 
         if exceptions and self.fatal_exceptions:
             # Let's raise the first exception, we've logged them all anyway

@@ -83,7 +83,7 @@ class TestHttpServer(BaseHTTPServer.HTTPServer):
     When readonly is True, PUT and DELETE requests are be forbidden.
 
     Once self.run() is called, the server will handle requests until it
-    receives a request with a STOP method — see the StopRequest class.
+    receives a request with a STOP method -- see the StopRequest class.
     """
 
     def __init__(self, host='localhost', port=4080, readonly=False):
