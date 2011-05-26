@@ -1,7 +1,8 @@
-Original author: Ivan Sagalaev <maniac@softwaremaniacs.org>
+The first version of django_dust was written by:
+Ivan Sagalaev <maniac@softwaremaniacs.org>
 
-Current implementation: Aymeric Augustin <aymeric.augustin@m4x.org>
+with some contributions by:
+Alex Koshelev <daevaorn@gmail.com>
 
-Contributors:
-
-- Alex Koshelev <daevaorn@gmail.com>
+The current implementation is a backwards-incompatible rewrite by:
+Aymeric Augustin <aymeric.augustin@m4x.org>
