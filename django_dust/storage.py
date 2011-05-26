@@ -3,9 +3,10 @@ import socket
 import random
 import urlparse
 
-from django.core.files import base
+from django.core.files.base import ContentFile
 from django.core.files.storage import Storage, FileSystemStorage
 from django.conf import settings
+from django.utils.encoding import filepath_to_uri
 
 from . import http
 from .settings import get_setting
@@ -15,30 +16,30 @@ class DistributionError(IOError):
     pass
 
 
-class DistributedStorage(Storage):
-    '''
-    DistributedStorage saves files by copying them on several servers listed
-    in settings.DUST_MEDIA_HOSTS.
-    '''
-    def __init__(self, hosts=None, use_local=None, base_url=settings.MEDIA_URL, **kwargs):
-        super(DistributedStorage, self).__init__(**kwargs)
+class DistributedStorageMixin(object):
+
+    def __init__(self, hosts=None, base_url=None):
         if hosts is None:                                   # cover: disable
             hosts = get_setting('MEDIA_HOSTS')
         self.hosts = hosts
-        if use_local is None:                               # cover: disable
-            use_local = get_setting('USE_LOCAL_FS')
-        self.local_storage = use_local and FileSystemStorage(base_url=base_url, **kwargs)
+        if base_url is None:                                # cover: disable
+            base_url = settings.MEDIA_URL
         self.base_url = base_url
-        self.transport = http.HTTPTransport(base_url=base_url)
+        self.transport = http.HTTPTransport(base_url=self.base_url)
 
-    def _execute(self, func, name, args):
+    def _execute(self, action, name, data=None):
         '''
         Runs an operation (put or delete) over several hosts at once in multiple
         threads.
         '''
         def run(index, host):
             try:
-                results[index] = func(host, name, *args)
+                if action == 'PUT':
+                    results[index] = self.transport.put(host, name, data)
+                elif action == 'DELETE':
+                    results[index] = self.transport.delete(host, name)
+                else:
+                    raise ValueError("Unsupported action %r" % action)
             except Exception, e:
                 results[index] = (e)
 
@@ -74,57 +75,97 @@ class DistributedStorage(Storage):
         if exceptions:
             raise DistributionError(*exceptions)
 
+    ### Hooks for custom storage objects
+
     def _open(self, name, mode='rb'):
+        # Allowing writes would be doable, if we distribute the file to the
+        # media servers when it's closed. Let's forbid it for now.
         if mode != 'rb':
-            # In future when allowed to operate locally (self.local_storage)
-            # all modes can be allowed. However this will require executing
-            # distribution upon closing file opened for updates. This worth
-            # evaluating.
-            raise IOError('Illegal mode "%s". Only "rb" is supported.')
-        if self.local_storage:
-            return self.local_storage.open(name, mode)
-        host = random.choice(self.hosts)
-        return base.ContentFile(self.transport.get(host, name))
+            raise IOError('Unsupported mode %r, use %r.' % (mode, 'rb'))
 
     def _save(self, name, content):
-        name = self.get_available_name(name)
-        content.seek(0)
-        body = content.read()
-        self._execute(self.transport.put, name, [body])
-        return name
+        # It's hard to avoid buffering the whole file in memory,
+        # because different threads will read it simultaneously.
+        self._execute('PUT', name, content.read())
 
-    def get_available_name(self, name):
-        while self.exists(name):
-            try:
-                dot_index = name.rindex('.')
-            except ValueError: # filename has no dot
-                name += '_'
-            else:
-                name = name[:dot_index] + '_' + name[dot_index:]
-        return name
+    # The implementations of get_valid_name, get_available_name, path and url
+    # in Storage and FileSystemStorage are OK for DistributedStorage and
+    # HybridStorage.
 
-    def path(self, name):
-        if self.local_storage:
-            return self.local_storage.path(name)
-        return super(DistributedStorage, self).path(name)
+    ### Mandatory methods
 
     def delete(self, name):
-        self._execute(self.transport.delete, name, [])
+        self._execute('DELETE', name, [])
 
     def exists(self, name):
-        if self.local_storage:
-            return self.local_storage.exists(name)
         return self.transport.exists(random.choice(self.hosts), name)
 
-    def listdir(self, path):
-        if self.local_storage:
-            return self.local_storage.listdir(path)
-        raise NotImplementedError()
+    # It is not possible to implement listdir over pure HTTP. It could
+    # be done with WebDAV.
 
     def size(self, name):
-        if self.local_storage:
-            return self.local_storage.size(name)
         return self.transport.size(random.choice(self.hosts), name)
 
     def url(self, name):
-        return urlparse.urljoin(self.base_url, name.replace('\\', '/'))
+        return urlparse.urljoin(self.base_url, filepath_to_uri(name))
+
+
+class DistributedStorage(DistributedStorageMixin, Storage):
+
+    def __init__(self, hosts=None, base_url=None):
+        DistributedStorageMixin.__init__(self, hosts, base_url)
+        Storage.__init__(self)
+
+    ### Hooks for custom storage objects
+
+    def _open(self, name, mode='rb'):
+        DistributedStorageMixin._open(self, name, mode)     # just a check
+        host = random.choice(self.hosts)
+        return ContentFile(self.transport.get(host, name))
+
+    def _save(self, name, content):
+        # This is really prone to race conditions - see README.
+        name = self.get_available_name(name)
+        DistributedStorageMixin._save(self, name, content)
+        return name
+
+
+class HybridStorage(DistributedStorageMixin, FileSystemStorage):
+
+    def __init__(self, hosts=None, base_url=None, location=None):
+        DistributedStorageMixin.__init__(self, hosts, base_url)
+        FileSystemStorage.__init__(self, location, base_url)
+
+    # Read operations can be done with FileSystemStorage. Write operations
+    # must be done with FileSystemStorage and DistributedStorageMixin, in
+    # this order.
+
+    ### Hooks for custom storage objects
+
+    def _open(self, name, mode='rb'):
+        DistributedStorageMixin._open(self, name, mode)     # just a check
+        return FileSystemStorage._open(self, name, mode)
+
+    def _save(self, name, content):
+        name = FileSystemStorage._save(self, name, content)
+        content.seek(0)
+        # After this line, we will assume that 'name' is available on the
+        # media servers. This could be wrong if a DELETE for this file name
+        # failed at some point in the past.
+        DistributedStorageMixin._save(self, name, content)
+        return name
+
+    ### Mandatory methods
+
+    def delete(self, name):
+        FileSystemStorage.delete(self, name)
+        DistributedStorageMixin.delete(self, name)
+
+    def exists(self, name):
+        return FileSystemStorage.exists(self, name)
+
+    def listdir(self, name):
+        return FileSystemStorage.listdir(self, name)
+
+    def size(self, name):
+        return FileSystemStorage.size(self, name)
