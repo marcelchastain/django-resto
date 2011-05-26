@@ -6,8 +6,8 @@ import urllib2
 from django.conf import settings
 from django.utils import unittest
 
-from ..http_server import GetRequest, HeadRequest, DeleteRequest, \
-        PutRequest, StopRequest, TestHttpServer
+from ..http import GetRequest, HeadRequest, DeleteRequest, PutRequest
+from ..http_server import StopRequest, TestHttpServer
 
 
 class HttpServerTestCaseMixin(object):

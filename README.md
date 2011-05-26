@@ -89,8 +89,6 @@ This trade-off has two consequences:
 
         $ pip install django_dust
 
-    `django_dust` requires [httplib2][3] >= 0.4. (TODO: use urllib2.)
-
 2.  Add django_dust to `INSTALLED_APPS`:
 
         INSTALLED_APPS += 'django_dust',
@@ -191,4 +189,3 @@ Here is an example of nginx config, assuming the server was compiled
 
 [1]: http://docs.djangoproject.com/en/dev/ref/files/storage/
 [2]: http://en.wikipedia.org/wiki/CAP_theorem
-[3]: http://code.google.com/p/httplib2/

@@ -2,26 +2,6 @@ import BaseHTTPServer
 import urllib2
 
 
-class GetRequest(urllib2.Request):
-    def get_method(self):
-        return 'GET'
-
-
-class HeadRequest(urllib2.Request):
-    def get_method(self):
-        return 'HEAD'
-
-
-class DeleteRequest(urllib2.Request):
-    def get_method(self):
-        return 'DELETE'
-
-
-class PutRequest(urllib2.Request):
-    def get_method(self):
-        return 'PUT'
-
-
 class StopRequest(urllib2.Request):
     def get_method(self):
         return 'STOP'

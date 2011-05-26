@@ -1,91 +1,113 @@
-import httplib2
-from urlparse import urlsplit
+import urllib2
+import urlparse
 
 from .settings import get_setting
 
 
-class HTTPError(Exception):
-    pass
+class UnexpectedStatusCode(urllib2.HTTPError):
+
+    def __init__(self, resp):
+        super(UnexpectedStatusCode, self).__init__(
+            resp.url, resp.code, resp.msg, resp.headers, resp.fp)
 
 
 class HTTPTransport(object):
-    '''
-    Transport for doing actual saving and deleting files on remote machines.
-    Uses httplib2 and expects that target HTTP host support PUT and DELETE
-    methods (apart from the all usual).
-    '''
+    """Transport to read and write files over HTTP.
+
+    This transport expects that the target HTTP hosts implements the GET,
+    HEAD, PUT and DELETE methods according to RFC2616.
+    """
     timeout = get_setting('TIMEOUT')
 
     def __init__(self, base_url):
-        scheme, host, path, query, fragment = urlsplit(base_url)
+        scheme, netloc, path, query, fragment = urlparse.urlsplit(base_url)
+        if query or fragment:
+            raise ValueError('base_url may not contain a query or fragment.')
         self.scheme = scheme or 'http'
-        self.url_path = path or '/'
+        self.path = path or '/'
 
-    def _get_url(self, host, name):
-        '''
-        Constructs a full URL for a given host and file name.
-        '''
-        return '%s://%s%s%s' % (self.scheme, host, self.url_path, name)
+    def get_url(self, host, name):
+        """Return the full URL for a file on a given host."""
+        path = self.path + name
+        return urlparse.urlunsplit((self.scheme, host, path, '', ''))
 
-    def _headers(self, host, name):
-        '''
-        Gets headers of an HTTP response for a given file name using HEAD
-        request. Used in `exists` and `size`.
-        '''
-        http = httplib2.Http(timeout=self.timeout)
-        url = self._get_url(host, name)
-        response, response_body = http.request(url, 'HEAD')
-        if response.status >= 400 and response.status != 404:
-            raise HTTPError('HEAD', url, response.status)
-        return response
-
-    # Public interface of a transport. Transport should support following
-    # methods:
-    #
-    # - put     uploading a file
-    # - delete  deleting a file
-    # - get     getting a file's contents
-    # - exists  test if a file exists
-    # - size    get a file size
-    #
-    # All methods are free to raise appropriate exceptions if some functionality
-    # is not supported.
-
-    def put(self, host, name, body):
-        http = httplib2.Http(timeout=self.timeout)
-        url = self._get_url(host, name)
-        response, response_body = http.request(url, 'PUT',
-            body=body,
-            headers={'Content-type': 'application/octet-stream'}
-        )
-        if response.status >= 400:
-            raise HTTPError('PUT', url, response.status)
-
-    def delete(self, host, name):
-        http = httplib2.Http(timeout=self.timeout)
-        url = self._get_url(host, name)
-        response, response_body = http.request(url, 'DELETE')
-        if response.status >= 400 and response.status != 404:
-            raise HTTPError('DELETE', url, response.status)
-
-    def get(self, host, name):
-        http = httplib2.Http(timeout=self.timeout)
-        url = self._get_url(host, name)
-        response, response_body = http.request(url, 'GET')
-        if response.status >= 400:
-            raise HTTPError('GET', url, response.status)
-        return response_body
+    def content(self, host, name):
+        url = self.get_url(host, name)
+        resp = urllib2.urlopen(GetRequest(url), timeout=self.timeout)
+        length = resp.info().get('Content-Length')
+        if length is None:
+            return resp.read()
+        else:
+            return resp.read(int(length))
 
     def exists(self, host, name):
-        response = self._headers(host, name)
-        return response.status == 200
+        url = self.get_url(host, name)
+        try:
+            resp = urllib2.urlopen(HeadRequest(url), timeout=self.timeout)
+            return True                 # server sent a 2xx code, file exists
+        except urllib2.HTTPError, e:
+            if e.code in (404, 410):    # server says the file doesn't exist
+                return False
+            raise
 
     def size(self, host, name):
-        response = self._headers(host, name)
+        url = self.get_url(host, name)
+        resp = urllib2.urlopen(HeadRequest(url), timeout=self.timeout)
+        length = resp.info().get('Content-Length')
+        if length is None:
+            raise NotImplementedError("The HTTP server did not provide a"
+                    "content length for %r." % resp.geturl())
+        return int(length)
+
+    def create(self, host, name, content):
+        """Create or update a file with a PUT request.
+
+        Return True if the file existed, False if it did not.
+        Raise an urllib2.URLError if something goes wrong.
+        """
+        url = self.get_url(host, name)
+        resp = urllib2.urlopen(PutRequest(url, content), timeout=self.timeout)
+        if resp.code == 201:
+            return False
+        elif resp.code == 204:
+            return True
+        else:
+            raise UnexpectedStatusCode(resp)
+
+    def delete(self, host, name):
+        """Delete a file with a PUT request.
+
+        Return True if the file existed, False if it did not.
+        Raise an urllib2.URLError if something goes wrong.
+        """
+        url = self.get_url(host, name)
         try:
-            return int(response['content-length'])
-        except (KeyError, ValueError):
-            raise Exception('Invalid or missing content length for %s: "%s"' % (
-                name,
-                response.get('content-length'),
-            ))
+            resp = urllib2.urlopen(DeleteRequest(url), timeout=self.timeout)
+            if resp.code in (200, 202, 204):
+                return True
+            else:
+                raise UnexpectedStatusCode(resp)
+        except urllib2.HTTPError, e:
+            if e.code in (404, 410):    # server says the file doesn't exist
+                return False
+            raise
+
+
+class GetRequest(urllib2.Request):
+    def get_method(self):
+        return 'GET'
+
+
+class HeadRequest(urllib2.Request):
+    def get_method(self):
+        return 'HEAD'
+
+
+class DeleteRequest(urllib2.Request):
+    def get_method(self):
+        return 'DELETE'
+
+
+class PutRequest(urllib2.Request):
+    def get_method(self):
+        return 'PUT'

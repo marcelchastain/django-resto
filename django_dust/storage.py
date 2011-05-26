@@ -28,14 +28,11 @@ class DistributedStorageMixin(object):
         self.transport = http.HTTPTransport(base_url=self.base_url)
 
     def _execute(self, action, name, data=None):
-        '''
-        Runs an operation (put or delete) over several hosts at once in multiple
-        threads.
-        '''
+        """Run an action (PUT or DELETE) over several hosts in parallel."""
         def run(index, host):
             try:
                 if action == 'PUT':
-                    results[index] = self.transport.put(host, name, data)
+                    results[index] = self.transport.create(host, name, data)
                 elif action == 'DELETE':
                     results[index] = self.transport.delete(host, name)
                 else:
@@ -73,6 +70,7 @@ class DistributedStorageMixin(object):
             elif isinstance(result, Exception):
                 exceptions.append(result)
         if exceptions:
+            # TODO
             raise DistributionError(*exceptions)
 
     ### Hooks for custom storage objects
@@ -121,7 +119,7 @@ class DistributedStorage(DistributedStorageMixin, Storage):
     def _open(self, name, mode='rb'):
         DistributedStorageMixin._open(self, name, mode)     # just a check
         host = random.choice(self.hosts)
-        return ContentFile(self.transport.get(host, name))
+        return ContentFile(self.transport.content(host, name))
 
     def _save(self, name, content):
         # This is really prone to race conditions - see README.
