@@ -1,19 +1,12 @@
 from threading import Thread
-import socket
 import random
+import urllib2
 import urlparse
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import Storage, FileSystemStorage
 from django.conf import settings
 from django.utils.encoding import filepath_to_uri
-
-from . import http
-from .settings import get_setting
-
-
-import urllib2
-import urlparse
 
 from .settings import get_setting
 
