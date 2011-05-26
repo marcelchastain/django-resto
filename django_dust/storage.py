@@ -1,11 +1,11 @@
-from threading import Thread
 import random
+import threading
 import urllib2
 import urlparse
 
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import Storage, FileSystemStorage
-from django.conf import settings
 from django.utils.encoding import filepath_to_uri
 
 from .settings import get_setting
@@ -13,27 +13,43 @@ from .settings import get_setting
 
 class UnexpectedStatusCode(urllib2.HTTPError):
 
+    """Exception raised when a server returns an unexpected status code.
+
+    Only the most common codes (200, 201, 204, 404) are interpreted by
+    DefaultTransport. If it receives another code, it will raise this
+    exception. It won't try to interpret the class of the status code.
+
+    For instance, "202 Accepted" indicates a successful request, but it
+    breaks our expectation that the upload is synchronous. So we'd better
+    raise an exception. Other uncommon codes pose similar problems.
+    """
+
     def __init__(self, resp):
         super(UnexpectedStatusCode, self).__init__(
             resp.url, resp.code, resp.msg, resp.headers, resp.fp)
 
 
 class GetRequest(urllib2.Request):
+    """HTTP GET request."""
+    # This adds nothing to urllib2, but it's there for consistency.
     def get_method(self):
         return 'GET'
 
 
 class HeadRequest(urllib2.Request):
+    """HTTP HEAD request."""
     def get_method(self):
         return 'HEAD'
 
 
 class DeleteRequest(urllib2.Request):
+    """HTTP DELETE request."""
     def get_method(self):
         return 'DELETE'
 
 
 class PutRequest(urllib2.Request):
+    """HTTP PUT request."""
     def get_method(self):
         return 'PUT'
 
@@ -54,11 +70,15 @@ class DefaultTransport(object):
         self.path = path or '/'
 
     def get_url(self, host, name):
-        """Return the full URL for a file on a given host."""
+        """Return the full URL for a file on a given host (internal use)."""
         path = self.path + name
         return urlparse.urlunsplit((self.scheme, host, path, '', ''))
 
     def content(self, host, name):
+        """Get the content of a file as a string.
+
+        urllib2.URLError will be raised if something goes wrong.
+        """
         url = self.get_url(host, name)
         resp = urllib2.urlopen(GetRequest(url), timeout=self.timeout)
         length = resp.info().get('Content-Length')
@@ -68,6 +88,12 @@ class DefaultTransport(object):
             return resp.read(int(length))
 
     def exists(self, host, name):
+        """Check if a file exists.
+
+        Return True if the file exists, False if it doesn't.
+
+        urllib2.URLError will be raised if something goes wrong.
+        """
         url = self.get_url(host, name)
         try:
             resp = urllib2.urlopen(HeadRequest(url), timeout=self.timeout)
@@ -78,6 +104,12 @@ class DefaultTransport(object):
             raise
 
     def size(self, host, name):
+        """Check the size of a file.
+
+        This method relies on the Content-Length header.
+
+        urllib2.URLError will be raised if something goes wrong.
+        """
         url = self.get_url(host, name)
         resp = urllib2.urlopen(HeadRequest(url), timeout=self.timeout)
         length = resp.info().get('Content-Length')
@@ -87,10 +119,11 @@ class DefaultTransport(object):
         return int(length)
 
     def create(self, host, name, content):
-        """Create or update a file with a PUT request.
+        """Create or update a file.
 
         Return True if the file existed, False if it did not.
-        Raise an urllib2.URLError if something goes wrong.
+
+        urllib2.URLError will be raised if something goes wrong.
         """
         url = self.get_url(host, name)
         resp = urllib2.urlopen(PutRequest(url, content), timeout=self.timeout)
@@ -102,10 +135,11 @@ class DefaultTransport(object):
             raise UnexpectedStatusCode(resp)
 
     def delete(self, host, name):
-        """Delete a file with a PUT request.
+        """Delete a file.
 
         Return True if the file existed, False if it did not.
-        Raise an urllib2.URLError if something goes wrong.
+
+        urllib2.URLError will be raised if something goes wrong.
         """
         url = self.get_url(host, name)
         try:
@@ -122,6 +156,8 @@ class DefaultTransport(object):
 
 class DistributedStorageMixin(object):
 
+    """Mixin for storage backends that distribute files on several servers."""
+
     def __init__(self, hosts=None, base_url=None):
         if hosts is None:                                   # cover: disable
             hosts = get_setting('MEDIA_HOSTS')
@@ -132,7 +168,10 @@ class DistributedStorageMixin(object):
         self.transport = DefaultTransport(base_url=self.base_url)
 
     def execute_parallel(self, func, *args):
-        """Run an action (create or delete) over several hosts in parallel."""
+        """Run an action over several hosts in parallel.
+
+        For each host, this will call func(host, *args).
+        """
         exceptions = {}
         def execute_one(host):
             try:
@@ -140,7 +179,7 @@ class DistributedStorageMixin(object):
             except Exception, exc:
                 exceptions[host] = exc
 
-        threads = [Thread(target=execute_one, args=(host,)) for host in self.hosts]
+        threads = [threading.Thread(target=execute_one, args=(host,)) for host in self.hosts]
         for thread in threads:
             thread.start()
         for thread in threads:
@@ -179,7 +218,7 @@ class DistributedStorageMixin(object):
     def exists(self, name):
         return self.transport.exists(random.choice(self.hosts), name)
 
-    # It is not possible to implement listdir over pure HTTP. It could
+    # It is not possible to implement listdir in pure HTTP. It could
     # be done with WebDAV.
 
     def size(self, name):
@@ -190,6 +229,8 @@ class DistributedStorageMixin(object):
 
 
 class DistributedStorage(DistributedStorageMixin, Storage):
+
+    """Backend that stores files remotely over HTTP."""
 
     def __init__(self, hosts=None, base_url=None):
         DistributedStorageMixin.__init__(self, hosts, base_url)
@@ -210,6 +251,8 @@ class DistributedStorage(DistributedStorageMixin, Storage):
 
 
 class HybridStorage(DistributedStorageMixin, FileSystemStorage):
+
+    """Backend that stores files both locally and remotely over HTTP."""
 
     def __init__(self, hosts=None, base_url=None, location=None):
         DistributedStorageMixin.__init__(self, hosts, base_url)

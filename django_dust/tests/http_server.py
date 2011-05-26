@@ -1,4 +1,3 @@
-import os
 import os.path
 import threading
 import urllib2
@@ -6,8 +5,8 @@ import urllib2
 from django.conf import settings
 from django.utils import unittest
 
-from ..storage import GetRequest, HeadRequest, DeleteRequest, PutRequest
 from ..http_server import StopRequest, TestHttpServer
+from ..storage import GetRequest, HeadRequest, DeleteRequest, PutRequest
 
 
 class HttpServerTestCaseMixin(object):
@@ -69,7 +68,7 @@ class HttpServerTestCase(HttpServerTestCaseMixin, unittest.TestCase):
         # attempt to put in read-only mode
         self.http_server.create_file(self.filename, 'test')
         self.http_server.readonly = True
-        self.assertHttpErrorCode(500, DeleteRequest(self.url, 'test'))
+        self.assertHttpErrorCode(403, DeleteRequest(self.url, 'test'))
 
     def test_put(self):
         # put a non-existing file
@@ -82,7 +81,7 @@ class HttpServerTestCase(HttpServerTestCaseMixin, unittest.TestCase):
         self.assertEqual(self.http_server.get_file(self.filename), 'test2')
         # attempt to put in read-only mode
         self.http_server.readonly = True
-        self.assertHttpErrorCode(500, PutRequest(self.url, 'test'))
+        self.assertHttpErrorCode(403, PutRequest(self.url, 'test'))
 
     def test_tear_down_works_even_if_server_is_stopped(self):
         self.assertHttpSuccess(StopRequest(self.url))

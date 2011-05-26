@@ -2,7 +2,7 @@
 
 Override them in the settings file of your project.
 
-See the README for more information on the settings.
+See the README for more information.
 """
 
 from django.conf import settings

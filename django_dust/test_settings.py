@@ -1,11 +1,10 @@
-import os
 import os.path
 
 DATABASES = {
     'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'},
 }
 
-DEFAULT_FILE_STORAGE = 'django_dust.storage.DistributedStorage'
+DEFAULT_FILE_STORAGE = 'django_dust.storage.HybridStorage'
 
 INSTALLED_APPS = ('django_dust',)
 
