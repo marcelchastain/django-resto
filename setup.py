@@ -12,9 +12,7 @@ setup(
     long_description=long_description,
     packages=[
         'django_dust',
-        'django_dust.backends',
-        'django_dust.management',
-        'django_dust.management.commands',
+        'django_dust.tests',
     ],
     classifiers = [
         "Development Status :: 3 - Alpha",
