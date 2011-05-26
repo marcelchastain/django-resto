@@ -12,8 +12,119 @@ from . import http
 from .settings import get_setting
 
 
-class DistributionError(IOError):
-    pass
+import urllib2
+import urlparse
+
+from .settings import get_setting
+
+
+class UnexpectedStatusCode(urllib2.HTTPError):
+
+    def __init__(self, resp):
+        super(UnexpectedStatusCode, self).__init__(
+            resp.url, resp.code, resp.msg, resp.headers, resp.fp)
+
+
+class GetRequest(urllib2.Request):
+    def get_method(self):
+        return 'GET'
+
+
+class HeadRequest(urllib2.Request):
+    def get_method(self):
+        return 'HEAD'
+
+
+class DeleteRequest(urllib2.Request):
+    def get_method(self):
+        return 'DELETE'
+
+
+class PutRequest(urllib2.Request):
+    def get_method(self):
+        return 'PUT'
+
+
+class DefaultTransport(object):
+    """Transport to read and write files over HTTP.
+
+    This transport expects that the target HTTP hosts implements the GET,
+    HEAD, PUT and DELETE methods according to RFC2616.
+    """
+    timeout = get_setting('TIMEOUT')
+
+    def __init__(self, base_url):
+        scheme, netloc, path, query, fragment = urlparse.urlsplit(base_url)
+        if query or fragment:
+            raise ValueError('base_url may not contain a query or fragment.')
+        self.scheme = scheme or 'http'
+        self.path = path or '/'
+
+    def get_url(self, host, name):
+        """Return the full URL for a file on a given host."""
+        path = self.path + name
+        return urlparse.urlunsplit((self.scheme, host, path, '', ''))
+
+    def content(self, host, name):
+        url = self.get_url(host, name)
+        resp = urllib2.urlopen(GetRequest(url), timeout=self.timeout)
+        length = resp.info().get('Content-Length')
+        if length is None:
+            return resp.read()
+        else:
+            return resp.read(int(length))
+
+    def exists(self, host, name):
+        url = self.get_url(host, name)
+        try:
+            resp = urllib2.urlopen(HeadRequest(url), timeout=self.timeout)
+            return True                 # server sent a 2xx code, file exists
+        except urllib2.HTTPError, e:
+            if e.code in (404, 410):    # server says the file doesn't exist
+                return False
+            raise
+
+    def size(self, host, name):
+        url = self.get_url(host, name)
+        resp = urllib2.urlopen(HeadRequest(url), timeout=self.timeout)
+        length = resp.info().get('Content-Length')
+        if length is None:
+            raise NotImplementedError("The HTTP server did not provide a"
+                    "content length for %r." % resp.geturl())
+        return int(length)
+
+    def create(self, host, name, content):
+        """Create or update a file with a PUT request.
+
+        Return True if the file existed, False if it did not.
+        Raise an urllib2.URLError if something goes wrong.
+        """
+        url = self.get_url(host, name)
+        resp = urllib2.urlopen(PutRequest(url, content), timeout=self.timeout)
+        if resp.code == 201:
+            return False
+        elif resp.code == 204:
+            return True
+        else:
+            raise UnexpectedStatusCode(resp)
+
+    def delete(self, host, name):
+        """Delete a file with a PUT request.
+
+        Return True if the file existed, False if it did not.
+        Raise an urllib2.URLError if something goes wrong.
+        """
+        url = self.get_url(host, name)
+        try:
+            resp = urllib2.urlopen(DeleteRequest(url), timeout=self.timeout)
+            if resp.code in (200, 202, 204):
+                return True
+            else:
+                raise UnexpectedStatusCode(resp)
+        except urllib2.HTTPError, e:
+            if e.code in (404, 410):    # server says the file doesn't exist
+                return False
+            raise
 
 
 class DistributedStorageMixin(object):
@@ -25,53 +136,30 @@ class DistributedStorageMixin(object):
         if base_url is None:                                # cover: disable
             base_url = settings.MEDIA_URL
         self.base_url = base_url
-        self.transport = http.HTTPTransport(base_url=self.base_url)
+        self.transport = DefaultTransport(base_url=self.base_url)
 
-    def _execute(self, action, name, data=None):
-        """Run an action (PUT or DELETE) over several hosts in parallel."""
-        def run(index, host):
+    def execute_parallel(self, func, *args):
+        """Run an action (create or delete) over several hosts in parallel."""
+        exceptions = {}
+        def execute_one(host):
             try:
-                if action == 'PUT':
-                    results[index] = self.transport.create(host, name, data)
-                elif action == 'DELETE':
-                    results[index] = self.transport.delete(host, name)
-                else:
-                    raise ValueError("Unsupported action %r" % action)
-            except Exception, e:
-                results[index] = (e)
+                func(host, *args)
+            except Exception, exc:
+                exceptions[host] = exc
 
-        # Run distribution threads keeping result of each operation in `results`.
-        results = [None] * len(self.hosts)
-        threads = [Thread(target=run, args=(index, h)) for index, h in enumerate(self.hosts)]
+        threads = [Thread(target=execute_one, args=(host,)) for host in self.hosts]
         for thread in threads:
             thread.start()
         for thread in threads:
             thread.join()
-        exceptions = []
-        for host, result in zip(self.hosts, results):
-            if result is None: # no errors, remember successful_host to use in retries
-                successful_host = host
-                break
-        else:
-            successful_host = None
 
-        # All `socket.error` exceptions are not fatal meaning that a host might
-        # be temporarily unavailable. Those operations are kept in a queue in
-        # database to be retried later.
-        # All other errors mean in most cases misconfigurations and are fatal
-        # for the whole distributed operation.
-        for host, result in zip(self.hosts, results):
-            if isinstance(result, socket.error):
-                if successful_host is not None:
-                    # TODO: retry code removed from here
-                    pass
-                else:
-                    exceptions.append(result)
-            elif isinstance(result, Exception):
-                exceptions.append(result)
-        if exceptions:
-            # TODO
-            raise DistributionError(*exceptions)
+        for exception in exceptions:
+            # TODO logging
+            pass
+
+        if exceptions and self.fatal_exceptions:
+            # Let's raise the first exception, we've logged them all anyway
+            raise exceptions[0]
 
     ### Hooks for custom storage objects
 
@@ -84,7 +172,7 @@ class DistributedStorageMixin(object):
     def _save(self, name, content):
         # It's hard to avoid buffering the whole file in memory,
         # because different threads will read it simultaneously.
-        self._execute('PUT', name, content.read())
+        self.execute_parallel(self.transport.create, name, content.read())
 
     # The implementations of get_valid_name, get_available_name, path and url
     # in Storage and FileSystemStorage are OK for DistributedStorage and
@@ -93,7 +181,7 @@ class DistributedStorageMixin(object):
     ### Mandatory methods
 
     def delete(self, name):
-        self._execute('DELETE', name, [])
+        self.execute_parallel(self.transport.delete, name)
 
     def exists(self, name):
         return self.transport.exists(random.choice(self.hosts), name)
@@ -148,7 +236,7 @@ class HybridStorage(DistributedStorageMixin, FileSystemStorage):
         name = FileSystemStorage._save(self, name, content)
         content.seek(0)
         # After this line, we will assume that 'name' is available on the
-        # media servers. This could be wrong if a DELETE for this file name
+        # media servers. This could be wrong if a delete for this file name
         # failed at some point in the past.
         DistributedStorageMixin._save(self, name, content)
         return name
