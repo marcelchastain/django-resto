@@ -1,11 +1,11 @@
-# README for `django_dust`
+# README
 
 ## Introduction
 
 `django_dust` (Distributed Upload STorage) provides file storage backends that
 can store files coming into a Django site on several servers simultaneously,
-using HTTP. `HybridStorage` will store the files locally on the filesystem
-and remotely, while `DistributedStorage` will only store them remotely.
+using HTTP. `HybridStorage` will store the files locally on the filesystem and
+remotely, while `DistributedStorage` will only store them remotely.
 
 This works for files uploaded by users through the admin or through custom
 Django forms, and also for files created by the application code, provided it
@@ -16,47 +16,74 @@ order to accept uploaded files and have them available on all media servers
 immediately for subsequent web requests that could be routed to any machine.
 
 
-## Use cases
-
-### Preliminary warning
-
-Django's built-in `FileSystemStorage` goes to great lengths to avoid race
-conditions. It is difficult for `django_dust` to provide the same guarantees,
-because of the [CAP theorem][2]. The limitation of its storage backends with
-regard to data consistency are explained below. Read them carefully.
+## How to use `django_dust`
 
 ### Recommended setup
 
-In an infrastructure for a Django website, each server has one (or several)
-of the following roles:
+In an infrastructure for a Django website, each server has one (or several) of
+the following roles:
 
 - Frontend servers handle directly HTTP requests for media and static files,
-  and forward other requests to the **application servers**.
-  For `django_dust`, the interesting part is that they are serving media
-  files, so we call them **media servers**.
-- Application servers run the Django application. This is where
-  `django_dust` is installed.
+  and forward other requests to the **application servers**. For
+  `django_dust`, the interesting part is that they are serving media files,
+  so we call them **media servers**.
+- Application servers run the Django application. This is where `django_dust`
+  is installed.
 - Database servers support the database.
 
-If you have several application servers, you should store a master copy of
+If you have several application servers, you should store a **master copy** of
 your media files on a NAS or a SAN attached to all your application servers.
-If you have a single application server, you can also store the master copy
-on the application server itself. In both cases, use `HybridStorage` to
-replicate uploaded files on all the media servers.
+If you have a single application server, you can also store the master copy on
+the application server itself.
 
-For the media servers, serving the files from the local filesystem is more efficient than serving them from a NAS or a SAN. This is the main advantage
-of `django_dust`. Also, it means that they don't depend on the NAS or SAN.
+In both cases, use `HybridStorage` to replicate uploaded files on all the
+media servers. Serving the media files from the local filesystem is more
+efficient than serving them from a NAS or a SAN. This is the main advantage of
+`django_dust`.
+
+### A little bit of theoretical background
+
+Django's built-in `FileSystemStorage` goes to great lengths to avoid race
+conditions and ensure data integrity.
+
+It is difficult for `django_dust` to provide the same guarantees, because of
+the [CAP theorem][2]. Instead, its storage backends can be configured to
+adjust the trade-off between the following properties:
+
+- **Consistency**: this is a intrisic weakness of `django_dust`, because it
+  uses plain HTTP, which doesn't provide transaction support, all the more
+  with several hosts. However, it targets _eventual consistency_.
+- **Availability**: `django_dust` generally improves the system's availability
+  by replicating the data on several servers. Also, it parallelizes storage
+  actions to minimize response time.
+- **Partition tolerance**: `django_dust` is designed to cope with hardware or
+  network failure. You can choose to maximize availability or consistency when
+  such problems occur.
 
 ### Keeping media directories synchronized
 
-If you bring an additional media server online, you must synchronize the
-content of `MEDIA_ROOT` from the master copy, for example with `rsync`.
+You can configure the behavior of `django_dust` when a media server is
+unavailable:
 
-If a media server is unavailable, `django_dust` will log a message at level
-`ERROR` for each failed upload. Once the server is back online, you can
-re-synchronize the contents of `MEDIA_ROOT` from the master copy with `rsync`.
-You can also set up a cron if you get random failures, for instance during
-load peaks. This provides eventual consistency.
+- If `DUST_FATAL_EXCEPTIONS` is `True`, which is the default value,
+  `django_dust` will raise an exception whenever an operation doesn't succeed
+  on all media servers. From the user's point of view, this usually results in
+  an HTTP 500 error, unless you have some advanced error handling. This
+  ensures that a failure won't go unnoticed.
+- If `DUST_FATAL_EXCEPTIONS` is `False`, `django_dust` will log a message at
+  level `ERROR` for each failed upload. This is useful if you want high
+  availability: if one media server is down, you can still upload and delete
+  files.
+
+In either case, since each operation is run in parallel on all the servers, it
+may succeed on some and fail on others. This results in an inconsistent state
+on the media servers. When you bring a broken server back online, you must
+re-synchronize the contents of its `MEDIA_ROOT` from the master copy, for
+instance with `rsync`. You can also set up a cron if you get random failures
+during load peaks. This provides eventual consistency.
+
+Obviously, if you bring an additional media server online, you must
+synchronize the content of its `MEDIA_ROOT` from the master copy.
 
 _`django_dust` used to keep a queue of failed operations to repeat them
 afterwards. This is inherently prone to data loss, because the order of `PUT`
@@ -65,20 +92,22 @@ the order. So, use `rsync` instead, it's fast enough._
 
 ### Low concurrency situations
 
-You may have several servers for high availability, but still expect a low
-concurrency on write operations. This is a common pattern for editorial
-websites. In such circumstances, you can decide not to store a master copy of
-your media files on the application server, by using `DistributedStorage`.
+You may have several servers for high availability or read performance, but
+still expect a low concurrency on write operations. This is a common pattern
+for editorial websites. In such circumstances, you can decide not to store a
+master copy of your media files on the application server. This behavior is
+implemented by `DistributedStorage`.
 
-This trade-off has two consequences:
+Be aware of the consequences:
 
-- `django_dust` will raise an error if a file can not be uploaded to all media
-  servers. You no longer have high availability for write operations.
+- It is very highly discouraged to set `DUST_FATAL_EXCEPTIONS` to `False`,
+  because you could lose uploaded files entirely without an exception. As a
+  consequence, you can't have high availability for write operations.
 - Race conditions become possible: if two people upload different files with
   the same name at the same time, you may randomly end up with one file or the
   other on each media server.
-- Checking if a file exists becomes more expensive, since it requires an HTTP
-  request.
+- Checking if a file exists becomes more expensive, because it requires an
+  HTTP request.
 
 
 ## Setup
@@ -97,8 +126,8 @@ This trade-off has two consequences:
 
         DEFAULT_FILE_STORAGE = 'django_dust.storage.HybridStorage'
 
-    This is optional. You can also enable a backend only for selected
-    fields in your models.
+    This is optional. You can also enable a backend only for selected fields
+    in your models.
 
 4.  Define the list of your media servers:
 
@@ -126,6 +155,14 @@ servers. See "Low concurrency situations" above.
 
 ### Settings
 
+#### `DUST_FATAL_EXCEPTIONS`
+
+Default: `True`
+
+Whether to throw an exception when an operation fails on a media server.
+
+Failed operations are always logged.
+
 #### `DUST_MEDIA_HOSTS`
 
 Default: `()`
@@ -134,7 +171,7 @@ List of host names for the media servers.
 
 The URL used to upload or delete a given media file is built using
 `MEDIA_URL`. It is the same URL used by the end user to download the file,
-except that the host name changes. It is not possible to use HTTPS.
+except that the host name changes. It isn't possible to use HTTPS.
 
 #### `DUST_TIMEOUT`
 
