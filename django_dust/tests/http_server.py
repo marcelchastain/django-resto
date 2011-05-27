@@ -26,8 +26,10 @@ class HttpServerTestCaseMixin(object):
 
     def tearDown(self):
         super(HttpServerTestCaseMixin, self).tearDown()
-        if self.thread.is_alive():
+        try:
             urllib2.urlopen(StopRequest(self.url), timeout=0.1)
+        except urllib2.URLError:
+            pass
         self.thread.join()
         self.http_server.server_close()
 
@@ -53,9 +55,10 @@ class ExtraHttpServerTestCaseMixin(object):
         self.alt_url = 'http://%s:%d/' % (self.host, self.port + 1)
 
     def tearDown(self):
-        if self.alt_thread.is_alive():
-            alt_url = 'http://%s:%d/' % (self.host, self.port + 1)
+        try:
             urllib2.urlopen(StopRequest(self.alt_url), timeout=0.1)
+        except urllib2.URLError:
+            pass
         self.alt_thread.join()
         self.alt_http_server.server_close()
         super(ExtraHttpServerTestCaseMixin, self).tearDown()
