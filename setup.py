@@ -17,6 +17,7 @@ distutils.core.setup(
     description='Distributed Upload STorage for Django, a file backend '
                 'that mirrors all incoming media files to several servers',
     long_description=long_description,
+    download_url='http://pypi.python.org/pypi/django-dust',
     packages=[
         'django_dust',
         'django_dust.tests',
@@ -31,4 +32,6 @@ distutils.core.setup(
         "Programming Language :: Python",
         "Topic :: Internet :: WWW/HTTP :: Site Management",
     ],
+    platforms='all',
+    license='BSD'
 )
