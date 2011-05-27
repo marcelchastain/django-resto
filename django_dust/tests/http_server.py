@@ -13,15 +13,13 @@ class HttpServerTestCaseMixin(object):
 
     host = 'localhost'
     port = 4080
-    readonly = False
     filename = 'test.txt'
     url = 'http://%s:%d/%s' % (host, port, filename)
     filepath = os.path.join(settings.MEDIA_ROOT, filename)
 
     def setUp(self):
         super(HttpServerTestCaseMixin, self).setUp()
-        self.http_server = TestHttpServer(self.host, self.port,
-            readonly=self.readonly)
+        self.http_server = TestHttpServer(self.host, self.port)
         self.thread = threading.Thread(target=self.http_server.run)
         self.thread.daemon = True
         self.thread.start()
@@ -41,6 +39,26 @@ class HttpServerTestCaseMixin(object):
             urllib2.urlopen(*args)
         self.assertEqual(context.exception.code, code, 'Expected HTTP %d, '
                 'got HTTP %d' % (code, context.exception.code))
+
+
+class ExtraHttpServerTestCaseMixin(object):
+
+    def setUp(self):
+        super(ExtraHttpServerTestCaseMixin, self).setUp()
+
+        self.alt_http_server = TestHttpServer(self.host, self.port + 1)
+        self.alt_thread = threading.Thread(target=self.alt_http_server.run)
+        self.alt_thread.daemon = True
+        self.alt_thread.start()
+        self.alt_url = 'http://%s:%d/' % (self.host, self.port + 1)
+
+    def tearDown(self):
+        if self.alt_thread.is_alive():
+            alt_url = 'http://%s:%d/' % (self.host, self.port + 1)
+            urllib2.urlopen(StopRequest(self.alt_url), timeout=0.1)
+        self.alt_thread.join()
+        self.alt_http_server.server_close()
+        super(ExtraHttpServerTestCaseMixin, self).tearDown()
 
 
 class HttpServerTestCase(HttpServerTestCaseMixin, unittest.TestCase):
@@ -83,5 +101,12 @@ class HttpServerTestCase(HttpServerTestCaseMixin, unittest.TestCase):
         self.http_server.readonly = True
         self.assertHttpErrorCode(403, PutRequest(self.url, 'test'))
 
+
+class HttpServerShutDownTestCase(ExtraHttpServerTestCaseMixin,
+        HttpServerTestCaseMixin, unittest.TestCase):
+
     def test_tear_down_works_even_if_server_is_stopped(self):
         self.assertHttpSuccess(StopRequest(self.url))
+
+    def test_tear_down_works_even_if_alt_server_is_stopped(self):
+        self.assertHttpSuccess(StopRequest(self.alt_url))

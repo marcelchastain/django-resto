@@ -67,10 +67,15 @@ class TestHttpServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def do_STOP(self):
         self.server.running = False
+        self.server.override_code = None
         self.no_content()
 
-    def log_message(*args):
+    def log_message(self, *args):
         pass    # disable logging
+
+    def send_response(self, code, message=None):
+        BaseHTTPServer.BaseHTTPRequestHandler.send_response(self,
+            self.server.override_code or code, message)
 
 
 class TestHttpServer(BaseHTTPServer.HTTPServer):
@@ -84,11 +89,14 @@ class TestHttpServer(BaseHTTPServer.HTTPServer):
 
     Once self.run() is called, the server will handle requests until it
     receives a request with a STOP method -- see the StopRequest class.
+
+    self.override_code and self.readonly are used to test invalid behaviors.
     """
 
-    def __init__(self, host='localhost', port=4080, readonly=False):
+    def __init__(self, host='localhost', port=4080):
         self.files = {}
-        self.readonly = readonly
+        self.override_code = None
+        self.readonly = False
         BaseHTTPServer.HTTPServer.__init__(self, (host, port),
                 TestHttpServerRequestHandler)
 

@@ -86,8 +86,10 @@ class DefaultTransport(object):
         """
         url = self.get_url(host, name)
         resp = urllib2.urlopen(GetRequest(url), timeout=self.timeout)
+        if resp.code != 200:
+            raise UnexpectedStatusCode(resp)
         length = resp.info().get('Content-Length')
-        if length is None:
+        if length is None:                                  # cover: disable
             return resp.read()
         else:
             return resp.read(int(length))
@@ -102,11 +104,13 @@ class DefaultTransport(object):
         url = self.get_url(host, name)
         try:
             resp = urllib2.urlopen(HeadRequest(url), timeout=self.timeout)
-            return True                 # server sent a 2xx code, file exists
+            if resp.code != 200:
+                raise UnexpectedStatusCode(resp)
+            return True
         except urllib2.HTTPError, e:
-            if e.code in (404, 410):    # server says the file doesn't exist
-                return False
-            raise
+            if e.code not in (404, 410):
+                raise
+            return False
 
     def size(self, host, name):
         """Check the size of a file.
@@ -117,6 +121,8 @@ class DefaultTransport(object):
         """
         url = self.get_url(host, name)
         resp = urllib2.urlopen(HeadRequest(url), timeout=self.timeout)
+        if resp.code != 200:
+            raise UnexpectedStatusCode(resp)
         length = resp.info().get('Content-Length')
         if length is None:
             raise NotImplementedError("The HTTP server did not provide a"
@@ -135,6 +141,7 @@ class DefaultTransport(object):
         if resp.code == 201:
             return False
         elif resp.code == 204:
+            logger.warning("PUT on existing file %s on %s.", name, host)
             return True
         else:
             raise UnexpectedStatusCode(resp)
@@ -149,14 +156,14 @@ class DefaultTransport(object):
         url = self.get_url(host, name)
         try:
             resp = urllib2.urlopen(DeleteRequest(url), timeout=self.timeout)
-            if resp.code in (200, 202, 204):
-                return True
-            else:
+            if resp.code not in (200, 204):
                 raise UnexpectedStatusCode(resp)
+            return True
         except urllib2.HTTPError, e:
-            if e.code in (404, 410):    # server says the file doesn't exist
-                return False
-            raise
+            if e.code not in (404, 410):
+                raise
+            logger.warning("DELETE on missing file %s on %s.", name, host)
+            return False
 
 
 class DistributedStorageMixin(object):
@@ -192,13 +199,12 @@ class DistributedStorageMixin(object):
             thread.join()
 
         for host, exception in exceptions.iteritems():
-            url = args[0]
             logger.error("Failed to %s %s on %s.", func.func_name, url, host,
                 exc_info=self.exc_info)
 
         if exceptions and self.fatal_exceptions:
             # Let's raise the first exception, we've logged them all anyway
-            raise exceptions[0]
+            raise exceptions.itervalues().next()
 
     ### Hooks for custom storage objects
 
@@ -223,13 +229,25 @@ class DistributedStorageMixin(object):
         self.execute_parallel(self.transport.delete, name)
 
     def exists(self, name):
-        return self.transport.exists(random.choice(self.hosts), name)
+        host = random.choice(self.hosts)
+        try:
+            return self.transport.exists(host, name)
+        except urllib2.URLError:
+            logger.error("Failed to check if %s exists on %s.", name, host,
+                    exc_info=self.exc_info)
+            raise
 
     # It is not possible to implement listdir in pure HTTP. It could
     # be done with WebDAV.
 
     def size(self, name):
-        return self.transport.size(random.choice(self.hosts), name)
+        host = random.choice(self.hosts)
+        try:
+            return self.transport.size(host, name)
+        except urllib2.URLError:
+            logger.error("Failed to get the size of %s from %s.", name, host,
+                    exc_info=self.exc_info)
+            raise
 
     def url(self, name):
         return urlparse.urljoin(self.base_url, filepath_to_uri(name))
@@ -241,6 +259,12 @@ class DistributedStorage(DistributedStorageMixin, Storage):
 
     def __init__(self, hosts=None, base_url=None):
         DistributedStorageMixin.__init__(self, hosts, base_url)
+        if not self.fatal_exceptions:
+            logger.warning("You're using the DistributedStorage backend with "
+                    "DUST_FATAL_EXCEPTIONS = %r.", self.fatal_exceptions)
+            logger.warning("This is prone to data-loss problems, and I won't "
+                    "take any responsibility in what happens from now on.")
+            logger.warning("You have been warned.")
         Storage.__init__(self)
 
     ### Hooks for custom storage objects
@@ -248,7 +272,12 @@ class DistributedStorage(DistributedStorageMixin, Storage):
     def _open(self, name, mode='rb'):
         DistributedStorageMixin._open(self, name, mode)     # just a check
         host = random.choice(self.hosts)
-        return ContentFile(self.transport.content(host, name))
+        try:
+            return ContentFile(self.transport.content(host, name))
+        except urllib2.URLError:
+            logger.error("Failed to download %s from %s.", name, host,
+                    exc_info=self.exc_info)
+            raise
 
     def _save(self, name, content):
         # This is really prone to race conditions - see README.
