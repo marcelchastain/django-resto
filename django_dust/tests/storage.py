@@ -253,12 +253,13 @@ class StorageTestCaseVariantsMixin(object):
     def test_path(self):
         self.assertRaises(NotImplementedError, self.storage.path, 'test.txt')
 
-    # This blows up in get_available_name with a different log message,
-    # so we duplicate the test here.
+    # Depending on which server is used by get_available_name, this can blow
+    # up with "Failed to create" or "Failed to check", so we loosen the check
+    # in the log file to the longest common prefix.
     def test_save_dilettante(self):
         self.http_server.override_code = 202
         self.assertRaises(UnexpectedStatusCode, self.storage.save, 'test.txt', ContentFile('test'))
-        self.assertIn("Failed to check", self.get_log())
+        self.assertIn("Failed to c", self.get_log())
 
     def test_size_broken(self):
         if len(self.storage.hosts) > 1:
