@@ -94,10 +94,10 @@ during load peaks. This provides eventual consistency.
 Obviously, if you bring an additional media server online, you must
 synchronize the content of its ``MEDIA_ROOT`` from the master copy.
 
-*django-dust used to keep a queue of failed operations to repeat them
+django-dust used to keep a queue of failed operations to repeat them
 afterwards. This is inherently prone to data loss, because the order of
 ``PUT`` and ``DELETE`` operations matters, and retrying failed operations
-later breaks the order. So, use ``rsync`` instead, it's fast enough.*
+later breaks the order. So, use ``rsync`` instead, it's fast enough.
 
 Low concurrency situations
 --------------------------
@@ -168,7 +168,7 @@ With this backend, django-dust will run all file storage operations on
 ......................
 
 With this backend, django-dust will only store the files on the media servers.
-See "Low concurrency situations" above.
+See `Low concurrency situations`_.
 
 Settings
 --------
@@ -218,11 +218,11 @@ The backend uses HTTP to transfer files to media servers. The HTTP server must
 support the ``PUT`` and ``DELETE`` methods according to RFC 2616.
 
 In practice, these methods are often provided by an external module that
-implements WebDAV (RFC 2518). Unfortunately, WebDAV adds the concept of
+implements WebDAV (`RFC 2518`_). Unfortunately, WebDAV adds the concept of
 "collections" and changes the specification of the ``PUT`` methods, making it
 necessary to create a collection with ``MKCOL`` before creating a resource
 with ``PUT``. Currently, django-dust requires a server that just implements
-HTTP/1.1 (RFC 2616).
+HTTP/1.1 (`RFC 2616`_).
 
 **It's critical to enable file uploads only from trusted IPs.** Otherwise,
 anyone could write or delete files on your media servers.
@@ -251,3 +251,6 @@ Here is an example of nginx config, assuming the server was compiled
             deny all;
         }
     }
+
+.. _RFC 2518: http://www.rfc-editor.org/rfc/rfc2518.txt
+.. _RFC 2616: http://www.rfc-editor.org/rfc/rfc2616.txt
