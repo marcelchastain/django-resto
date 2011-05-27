@@ -1,6 +1,4 @@
-"""Default settings for django_dust.
-
-Override them in the settings file of your project.
+"""Default settings. Override them in the settings file of your project.
 
 See the README for more information.
 """
