@@ -5,7 +5,7 @@ import os.path
 # Avoid polluting the .tar.gz with ._* files under Mac OS X
 os.putenv('COPYFILE_DISABLE', 'true')
 
-with open(os.path.join(os.path.dirname(__file__), 'README.txt')) as f:
+with open(os.path.join(os.path.dirname(__file__), 'README')) as f:
     long_description = '\n\n'.join(f.read().split('\n\n')[2:5])
 
 distutils.core.setup(
