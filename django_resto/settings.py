@@ -8,14 +8,14 @@ from django.conf import settings
 
 def get_setting(name):
     # raise a KeyError if we have no such setting
-    default = globals()['DUST_%s' % name]
+    default = globals()['RESTO_%s' % name]
     return getattr(settings, name, default)
 
 
-DUST_TIMEOUT = 2
+RESTO_TIMEOUT = 2
 
-DUST_MEDIA_HOSTS = ()
+RESTO_MEDIA_HOSTS = ()
 
-DUST_FATAL_EXCEPTIONS = True
+RESTO_FATAL_EXCEPTIONS = True
 
-DUST_SHOW_TRACEBACK = False
+RESTO_SHOW_TRACEBACK = False

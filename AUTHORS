@@ -1,8 +1,9 @@
-The first version of django-dust was written by:
+django-resto was written by:
+Aymeric Augustin <aymeric.augustin@m4x.org>
+
+It is a fork of django_dust, written by:
 Ivan Sagalaev <maniac@softwaremaniacs.org>
 
 with some contributions by:
 Alex Koshelev <daevaorn@gmail.com>
 
-The current implementation is a backwards-incompatible rewrite by:
-Aymeric Augustin <aymeric.augustin@m4x.org>

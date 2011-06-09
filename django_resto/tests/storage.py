@@ -19,7 +19,7 @@ class StorageUtilitiesMixin(HttpServerTestCaseMixin):
     def setUp(self):
         super(StorageUtilitiesMixin, self).setUp()
         self.log = StringIO.StringIO()
-        self.logger = logging.getLogger('django_dust.storage')
+        self.logger = logging.getLogger('django_resto.storage')
         self.handler = logging.StreamHandler(self.log)
         self.logger.addHandler(self.handler)
         hosts = ['%s:%d' % (self.host, self.port)]

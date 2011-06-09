@@ -261,7 +261,7 @@ class DistributedStorage(DistributedStorageMixin, Storage):
         DistributedStorageMixin.__init__(self, hosts, base_url)
         if not self.fatal_exceptions:
             logger.warning("You're using the DistributedStorage backend with "
-                    "DUST_FATAL_EXCEPTIONS = %r.", self.fatal_exceptions)
+                    "RESTO_FATAL_EXCEPTIONS = %r.", self.fatal_exceptions)
             logger.warning("This is prone to data-loss problems, and I won't "
                     "take any responsibility in what happens from now on.")
             logger.warning("You have been warned.")

@@ -4,9 +4,9 @@ DATABASES = {
     'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'},
 }
 
-DEFAULT_FILE_STORAGE = 'django_dust.storage.HybridStorage'
+DEFAULT_FILE_STORAGE = 'django_resto.storage.HybridStorage'
 
-INSTALLED_APPS = ('django_dust',)
+INSTALLED_APPS = ('django_resto',)
 
 MEDIA_ROOT = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'tests', 'media')
 
