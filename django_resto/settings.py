@@ -7,8 +7,9 @@ from django.conf import settings
 
 
 def get_setting(name):
+    name = 'RESTO_%s' % name
     # raise a KeyError if we have no such setting
-    default = globals()['RESTO_%s' % name]
+    default = globals()[name]
     return getattr(settings, name, default)
 
 
