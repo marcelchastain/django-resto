@@ -17,13 +17,13 @@ django-resto is useful for sites deployed in a multi-server environment, in
 order to accept uploaded files and have them available on all media servers
 immediately for subsequent web requests that could be routed to any machine.
 
-`django-resto`_ is a fork of `django-dust`_ with a strong focus on consistency,
-while django-dust's is more concerned with availability. The two projects cover
+`django-resto`_ is a fork of `django_dust`_ with a strong focus on consistency,
+while django_dust is more concerned with availability. The two projects cover
 different use-cases.
 
 .. _storage API: http://docs.djangoproject.com/en/dev/ref/files/storage/
 .. _django-resto: https://github.com/aaugustin/django-resto
-.. _django-dust: https://github.com/isagalaev/django_dust
+.. _django_dust: https://github.com/isagalaev/django_dust
 
 How to
 ======
@@ -43,9 +43,9 @@ the following roles:
 - Database servers support the database.
 
 If you have several application servers, you should store a **master copy** of
-your media files on a NAS or a SAN attached to all your application servers.
-If you have a single application server, you can also store the master copy on
-the application server itself.
+your media files on a NAS or a SAN attached to all your application servers. If
+you have a single application server, you can also store the master copy on the
+application server itself.
 
 In both cases, use ``HybridStorage`` to replicate uploaded files on all the
 media servers. Serving the media files from the local filesystem is more
@@ -85,8 +85,8 @@ unavailable:
   all media servers. From the user's point of view, this usually results in an
   HTTP 500 error, unless you have some advanced error handling. This ensures
   that a failure won't go unnoticed.
-- If ``RESTO_FATAL_EXCEPTIONS`` is ``False``, django-resto will log a message at
-  level ``ERROR`` for each failed upload. This is useful if you want high
+- If ``RESTO_FATAL_EXCEPTIONS`` is ``False``, django-resto will log a message
+  at level ``ERROR`` for each failed upload. This is useful if you want high
   availability: if one media server is down, you can still upload and delete
   files.
 
@@ -97,13 +97,13 @@ re-synchronize the contents of its ``MEDIA_ROOT`` from the master copy, for
 instance with ``rsync``. You can also set up a cron if you get random failures
 during load peaks. This provides eventual consistency.
 
-Obviously, if you bring an additional media server online, you must
-synchronize the content of its ``MEDIA_ROOT`` from the master copy.
+Obviously, if you bring an additional media server online, you must synchronize
+the content of its ``MEDIA_ROOT`` from the master copy.
 
-django-dust keeps a queue of failed operations to repeat them afterwards. This
-feature was removed in django-resto. It is prone to data loss, because the order
-of ``PUT`` and ``DELETE`` operations matters, and retrying failed operations
-later breaks the order. So, use ``rsync`` instead, it's fast enough.
+django_dust keeps a queue of failed operations to repeat them afterwards. This
+feature was removed in django-resto. It is prone to data loss, because the
+order of ``PUT`` and ``DELETE`` operations matters, and retrying failed
+operations later breaks the order. So, use ``rsync`` instead, it's fast enough.
 
 Low concurrency situations
 --------------------------
@@ -122,8 +122,8 @@ Be aware of the consequences:
 - Race conditions become possible: if two people upload different files with
   the same name at the same time, you may randomly end up with one file or the
   other on each media server.
-- Checking if a file exists becomes more expensive, because it requires an
-  HTTP request.
+- Checking if a file exists becomes more expensive, because it requires an HTTP
+  request.
 
 
 Setup
@@ -226,8 +226,8 @@ support the ``PUT`` and ``DELETE`` methods according to RFC 2616.
 In practice, these methods are often provided by an external module that
 implements WebDAV (`RFC 2518`_). Unfortunately, WebDAV adds the concept of
 "collections" and changes the specification of the ``PUT`` methods, making it
-necessary to create a collection with ``MKCOL`` before creating a resource
-with ``PUT``. Currently, django-resto requires a server that just implements
+necessary to create a collection with ``MKCOL`` before creating a resource with
+``PUT``. Currently, django-resto requires a server that just implements
 HTTP/1.1 (`RFC 2616`_).
 
 **It's critical to enable file uploads only from trusted IPs.** Otherwise,
