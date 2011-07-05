@@ -1,4 +1,5 @@
 import BaseHTTPServer
+import urllib
 import urllib2
 
 
@@ -17,7 +18,7 @@ class TestHttpServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     @property
     def filename(self):
-        return self.path.lstrip('/')
+        return urllib.unquote(self.path.lstrip('/')).decode('utf-8')
 
     @property
     def content(self):

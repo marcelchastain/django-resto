@@ -1,6 +1,7 @@
 import logging
 import random
 import threading
+import urllib
 import urllib2
 import urlparse
 
@@ -76,7 +77,7 @@ class DefaultTransport(object):
 
     def get_url(self, host, name):
         """Return the full URL for a file on a given host (internal use)."""
-        path = self.path + name
+        path = self.path + urllib.quote(name.encode('utf-8'))
         return urlparse.urlunsplit((self.scheme, host, path, '', ''))
 
     def content(self, host, name):
