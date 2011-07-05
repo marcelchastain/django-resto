@@ -30,7 +30,6 @@ class HttpServerTestCaseMixin(object):
             urllib2.urlopen(StopRequest(self.url), timeout=0.1)
         except urllib2.URLError:
             pass
-        self.thread.join()
         self.http_server.server_close()
 
     def assertHttpSuccess(self, *args):
