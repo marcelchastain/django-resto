@@ -308,10 +308,6 @@ class CoverageTestCaseVariantsMixin(object):
     def test_save_over_existing_file(self):
         self.storage._save('test.txt', ContentFile('test'))
         self.assertEqual(self.get_file('test.txt'), 'test')
-        # Hijack the check for an existing file. This is not sufficient with
-        # FileSystemStorage, and as a consquence with HybridStorage too,
-        # so the test only applies to DistributedStorage.
-        self.storage.get_available_name = lambda name: name
         self.storage._save('test.txt', ContentFile('test2'))
         self.assertEqual(self.get_file('test.txt'), 'test2')
         self.assertIn("PUT on existing file", self.get_log())

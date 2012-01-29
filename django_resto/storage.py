@@ -214,11 +214,19 @@ class DistributedStorageMixin(object):
         # media servers when it's closed. Let's forbid it for now.
         if mode != 'rb':
             raise IOError('Unsupported mode %r, use %r.' % (mode, 'rb'))
+        host = random.choice(self.hosts)
+        try:
+            return ContentFile(self.transport.content(host, name))
+        except urllib2.URLError:
+            logger.error("Failed to download %s from %s.", name, host,
+                    exc_info=self.exc_info)
+            raise
 
     def _save(self, name, content):
         # It's hard to avoid buffering the whole file in memory,
         # because different threads will read it simultaneously.
         self.execute_parallel(self.transport.create, name, content.read())
+        return name
 
     # The implementations of get_valid_name, get_available_name, path and url
     # in Storage and FileSystemStorage are OK for DistributedStorage and
@@ -268,24 +276,6 @@ class DistributedStorage(DistributedStorageMixin, Storage):
             logger.warning("You have been warned.")
         Storage.__init__(self)
 
-    ### Hooks for custom storage objects
-
-    def _open(self, name, mode='rb'):
-        DistributedStorageMixin._open(self, name, mode)     # just a check
-        host = random.choice(self.hosts)
-        try:
-            return ContentFile(self.transport.content(host, name))
-        except urllib2.URLError:
-            logger.error("Failed to download %s from %s.", name, host,
-                    exc_info=self.exc_info)
-            raise
-
-    def _save(self, name, content):
-        # This is really prone to race conditions - see README.
-        name = self.get_available_name(name)
-        DistributedStorageMixin._save(self, name, content)
-        return name
-
 
 class HybridStorage(DistributedStorageMixin, FileSystemStorage):
 
@@ -302,7 +292,9 @@ class HybridStorage(DistributedStorageMixin, FileSystemStorage):
     ### Hooks for custom storage objects
 
     def _open(self, name, mode='rb'):
-        DistributedStorageMixin._open(self, name, mode)     # just a check
+        # Writing is forbidden, see DistributedStorageMixin._open.
+        if mode != 'rb':
+            raise IOError('Unsupported mode %r, use %r.' % (mode, 'rb'))
         return FileSystemStorage._open(self, name, mode)
 
     def _save(self, name, content):
