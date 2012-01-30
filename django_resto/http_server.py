@@ -13,7 +13,7 @@ class TestHttpServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     """Request handler for the test HTTP server.
 
-    Logging is disable to avoid spurious output during the tests.
+    Console logging is disabled to avoid spurious output during the tests.
     """
 
     @property
@@ -71,6 +71,10 @@ class TestHttpServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.server.override_code = None
         self.no_content()
 
+    def log_request(self, code=None, size=None):
+        code = self.server.override_code or code
+        self.server.log.append((self.command, self.path, code))
+
     def log_message(self, *args):
         pass    # disable logging
 
@@ -91,11 +95,14 @@ class TestHttpServer(BaseHTTPServer.HTTPServer):
     Once self.run() is called, the server will handle requests until it
     receives a request with a STOP method -- see the StopRequest class.
 
+    self.log keeps a record of (method, path, response code) for each query.
+
     self.override_code and self.readonly are used to test invalid behaviors.
     """
 
     def __init__(self, host='localhost', port=4080):
         self.files = {}
+        self.log = []
         self.override_code = None
         self.readonly = False
         BaseHTTPServer.HTTPServer.__init__(self, (host, port),

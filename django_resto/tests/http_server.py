@@ -14,7 +14,8 @@ class HttpServerTestCaseMixin(object):
     host = 'localhost'
     port = 4080
     filename = 'test.txt'
-    url = 'http://%s:%d/%s' % (host, port, filename)
+    path = '/' + filename
+    url = 'http://%s:%d%s' % (host, port, path)
     filepath = os.path.join(settings.MEDIA_ROOT, filename)
 
     def setUp(self):
@@ -41,12 +42,18 @@ class HttpServerTestCaseMixin(object):
         self.assertEqual(context.exception.code, code, 'Expected HTTP %d, '
                 'got HTTP %d' % (code, context.exception.code))
 
+    def assertServerLogIs(self, log):
+        self.assertEqual(log, self.http_server.log)
+
+    assertEachServerLogIs = assertServerLogIs
+
+    assertAnyServerLogIs = assertServerLogIs
+
 
 class ExtraHttpServerTestCaseMixin(object):
 
     def setUp(self):
         super(ExtraHttpServerTestCaseMixin, self).setUp()
-
         self.alt_http_server = TestHttpServer(self.host, self.port + 1)
         self.alt_thread = threading.Thread(target=self.alt_http_server.run)
         self.alt_thread.daemon = True
@@ -62,6 +69,30 @@ class ExtraHttpServerTestCaseMixin(object):
         self.alt_http_server.server_close()
         super(ExtraHttpServerTestCaseMixin, self).tearDown()
 
+    def assertAltServerLogIs(self, log):
+        self.assertEqual(log, self.alt_http_server.log)
+
+    def assertEachServerLogIs(self, log):
+        self.assertServerLogIs(log)
+        self.assertAltServerLogIs(log)
+
+    def assertAnyServerLogIs(self, log):
+        return search_merge(log, self.http_server.log, self.alt_http_server.log)
+
+
+def search_merge(log, log1, log2):
+    if log == []:
+        return log1 == log2 == []
+    if log1 == []:
+        return log == log2
+    if log2 == []:
+        return log == log1
+    return (
+        (log[0] == log1[0] and search_merge(log[1:], log1[1:], log2))
+        or
+        (log[0] == log2[0] and search_merge(log[1:], log1, log2[1:]))
+    )
+
 
 class HttpServerTestCase(HttpServerTestCaseMixin, unittest.TestCase):
 
@@ -70,12 +101,20 @@ class HttpServerTestCase(HttpServerTestCaseMixin, unittest.TestCase):
         self.http_server.create_file(self.filename, 'test')
         body = self.assertHttpSuccess(GetRequest(self.url))
         self.assertEqual(body, 'test')
+        self.assertServerLogIs([
+            ('GET', self.path, 404),
+            ('GET', self.path, 200),
+        ])
 
     def test_head(self):
         self.assertHttpErrorCode(404, HeadRequest(self.url))
         self.http_server.create_file(self.filename, 'test')
         body = self.assertHttpSuccess(HeadRequest(self.url))
         self.assertEqual(body, '')
+        self.assertServerLogIs([
+            ('HEAD', self.path, 404),
+            ('HEAD', self.path, 200),
+        ])
 
     def test_delete(self):
         # delete a non-existing file
@@ -89,6 +128,11 @@ class HttpServerTestCase(HttpServerTestCaseMixin, unittest.TestCase):
         self.http_server.create_file(self.filename, 'test')
         self.http_server.readonly = True
         self.assertHttpErrorCode(403, DeleteRequest(self.url, 'test'))
+        self.assertServerLogIs([
+            ('DELETE', self.path, 404),
+            ('DELETE', self.path, 204),
+            ('DELETE', self.path, 403),
+        ])
 
     def test_put(self):
         # put a non-existing file
@@ -102,6 +146,11 @@ class HttpServerTestCase(HttpServerTestCaseMixin, unittest.TestCase):
         # attempt to put in read-only mode
         self.http_server.readonly = True
         self.assertHttpErrorCode(403, PutRequest(self.url, 'test'))
+        self.assertServerLogIs([
+            ('PUT', self.path, 201),
+            ('PUT', self.path, 204),
+            ('PUT', self.path, 403),
+        ])
 
 
 class HttpServerShutDownTestCase(ExtraHttpServerTestCaseMixin,

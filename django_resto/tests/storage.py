@@ -77,6 +77,8 @@ class StorageUtilitiesWithTwoServersMixin(
 
 class StorageTestCaseMixin(object):
 
+    # Tests for HybridStorage, see variants for DistributedStorage below
+
     # See http://docs.djangoproject.com/en/dev/ref/files/storage/
     # for the full storage API.
     # See http://docs.djangoproject.com/en/dev/howto/custom-file-storage/
@@ -85,56 +87,79 @@ class StorageTestCaseMixin(object):
     def test_accessed_time(self):
         self.create_file('test.txt', 'test')
         self.assertIsInstance(self.storage.accessed_time('test.txt'), datetime.datetime)
+        self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_accessed_time_non_existing(self):
         self.assertRaises(EnvironmentError, self.storage.accessed_time, 'test.txt')
+        self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_created_time(self):
         self.create_file('test.txt', 'test')
         self.assertIsInstance(self.storage.created_time('test.txt'), datetime.datetime)
+        self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_created_time_non_existing(self):
         self.assertRaises(EnvironmentError, self.storage.created_time, 'test.txt')
+        self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_delete(self):
         self.create_file('test.txt', 'test')
         self.assertTrue(self.has_file('test.txt'))
         self.storage.delete('test.txt')
         self.assertFalse(self.has_file('test.txt'))
+        self.assertEachServerLogIs([('DELETE', '/test.txt', 204)])
 
     def test_delete_non_existing(self):
         # by design, this doesn't raise an exception, but it logs a warning
         self.storage.delete('test.txt')
         self.assertFalse(self.has_file('test.txt'))
         self.assertIn("DELETE on missing file", self.get_log())
+        self.assertEachServerLogIs([('DELETE', '/test.txt', 404)])
 
     def test_delete_readonly(self):
         self.create_file('test.txt', 'test')
         self.http_server.readonly = True
         self.assertRaises(urllib2.HTTPError, self.storage.delete, 'test.txt')
         self.assertIn("Failed to delete", self.get_log())
+        self.assertServerLogIs([('DELETE', '/test.txt', 403)])
 
     def test_delete_dilettante(self):
         self.http_server.override_code = 202
         self.create_file('test.txt', 'test')
         self.assertRaises(UnexpectedStatusCode, self.storage.delete, 'test.txt')
         self.assertIn("Failed to delete", self.get_log())
+        self.assertServerLogIs([('DELETE', '/test.txt', 202)])
 
     def test_exists(self):
         self.create_file('test.txt', 'test')
         self.assertTrue(self.storage.exists('test.txt'))
         self.delete_file('test.txt')
         self.assertFalse(self.storage.exists('test.txt'))
+        if self.use_fs:
+            self.assertAnyServerLogIs([])
+        else:
+            self.assertAnyServerLogIs([('HEAD', '/test.txt', 200),
+                                       ('HEAD', '/test.txt', 404)])
 
     def test_get_available_name(self):
         self.assertEqual(self.storage.get_available_name('test.txt'), 'test.txt')
+        if self.use_fs:
+            self.assertAnyServerLogIs([])
+        else:
+            self.assertAnyServerLogIs([('HEAD', '/test.txt', 404)])
 
     def test_get_available_name_existing(self):
         self.create_file('test.txt', 'test')
         self.assertEqual(self.storage.get_available_name('test.txt'), 'test_1.txt')
+        if self.use_fs:
+            self.assertAnyServerLogIs([])
+        else:
+            self.assertAnyServerLogIs([('HEAD', '/test.txt', 200),
+                                       ('HEAD', '/test_1.txt', 404)])
 
     def test_get_valid_name(self):
         self.assertEqual(self.storage.get_valid_name('test.txt'), 'test.txt')
+        self.assertEachServerLogIs([])
 
     def test_listdir(self):
         self.create_file('test/foo.txt', 'foo')
@@ -143,83 +168,100 @@ class StorageTestCaseMixin(object):
         listing = self.storage.listdir('test')
         self.assertEqual(set(listing[0]), set(['baz']))
         self.assertEqual(set(listing[1]), set(['foo.txt', 'bar.txt']))
+        self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_listdir_non_existing(self):
         self.assertRaises(EnvironmentError, self.storage.listdir, 'test')
+        self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_modified_time(self):
         self.create_file('test.txt', 'test')
         self.assertIsInstance(self.storage.modified_time('test.txt'), datetime.datetime)
+        self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_modified_time_non_existing(self):
         self.assertRaises(EnvironmentError, self.storage.modified_time, 'test.txt')
+        self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_open(self):
         self.create_file('test.txt', 'test')
         with self.storage.open('test.txt') as f:
             self.assertEqual(f.read(), 'test')
+        if self.use_fs:
+            self.assertAnyServerLogIs([])
+        else:
+            self.assertAnyServerLogIs([('GET', '/test.txt', 200)])
 
     def test_path(self):
         self.create_file('test.txt', 'test')
         self.assertEqual(self.storage.path('test.txt'),
                          os.path.join(settings.MEDIA_ROOT, 'test.txt'))
+        self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_save(self):
         filename = self.storage.save('test.txt', ContentFile('test'))
         self.assertEqual(filename, 'test.txt')
         self.assertEqual(self.get_file('test.txt'), 'test')
+        if self.use_fs:
+            self.assertEachServerLogIs([('PUT', '/test.txt', 201)])
+        else:
+            self.assertAnyServerLogIs([('HEAD', '/test.txt', 404)] +
+                                      [('PUT', '/test.txt', 201)] * len(self.storage.hosts))
 
     def test_save_existing(self):
-        self.storage.save('test.txt', ContentFile('test'))
+        self.create_file('test.txt', 'test')
         filename = self.storage.save('test.txt', ContentFile('test2'))
         # a new file is generated
         self.assertEqual(filename, 'test_1.txt')
         self.assertEqual(self.get_file('test_1.txt'), 'test2')
+        if self.use_fs:
+            self.assertEachServerLogIs([('PUT', '/test_1.txt', 201)])
+        else:
+            self.assertAnyServerLogIs([('HEAD', '/test.txt', 200),
+                                       ('HEAD', '/test_1.txt', 404)] +
+                                      [('PUT', '/test_1.txt', 201)] * len(self.storage.hosts))
 
     def test_save_readonly(self):
         self.http_server.readonly = True
         self.assertRaises(urllib2.HTTPError, self.storage.save, 'test.txt', ContentFile('test'))
         self.assertIn("Failed to create", self.get_log())
+        if self.use_fs:
+            self.assertServerLogIs([('PUT', '/test.txt', 403)])
+        else:
+            self.assertAnyServerLogIs([('HEAD', '/test.txt', 404),
+                                       ('PUT', '/test.txt', 403)] +
+                                      [('PUT', '/test.txt', 201)] * (len(self.storage.hosts) - 1))
 
     def test_save_dilettante(self):
         self.http_server.override_code = 202
         self.assertRaises(UnexpectedStatusCode, self.storage.save, 'test.txt', ContentFile('test'))
         self.assertIn("Failed to create", self.get_log())
+        # overridden in StorageTestCaseVariantsMixin
+        self.assertServerLogIs([('PUT', '/test.txt', 202)])
 
     def test_size(self):
         self.create_file('test.txt', 'test')
         self.assertEqual(self.storage.size('test.txt'), 4)
+        if self.use_fs:
+            self.assertAnyServerLogIs([])
+        else:
+            self.assertAnyServerLogIs([('HEAD', '/test.txt', 200)])
 
     def test_url(self):
         self.create_file('test.txt', 'test')
         self.assertEqual(self.storage.url('test.txt'),
                 'http://media.example.com/test.txt')
-
+        self.assertEachServerLogIs([])
 
 class StorageTestCaseVariantsMixin(object):
 
-    # Adapt tests of methods that behave differently in DistributedStorage
-    # and HybridStorage. Disable tests that are non deterministic with
-    # DistributedStorage and an inconsistent state between the servers.
+    # Adapt for DistributedStorage tests of methods that behave differently,
+    # and disable tests that aren't deterministic with an inconsistent state.
 
     def test_accessed_time(self):
         self.assertRaises(NotImplementedError, self.storage.accessed_time, 'test.txt')
 
     test_accessed_time_non_existing = test_accessed_time
-
-    def test_open_broken(self):
-        if len(self.storage.hosts) > 1:
-            return
-        self.http_server.override_code = 500
-        self.assertRaises(urllib2.HTTPError, self.storage.open, 'test.txt')
-        self.assertIn("Failed to download", self.get_log())
-
-    def test_open_dilettante(self):
-        if len(self.storage.hosts) > 1:
-            return
-        self.http_server.override_code = 202
-        self.assertRaises(UnexpectedStatusCode, self.storage.open, 'test.txt')
-        self.assertIn("Failed to download", self.get_log())
 
     def test_created_time(self):
         self.assertRaises(NotImplementedError, self.storage.created_time, 'test.txt')
@@ -232,6 +274,7 @@ class StorageTestCaseVariantsMixin(object):
         self.http_server.override_code = 500
         self.assertRaises(urllib2.HTTPError, self.storage.exists, 'test.txt')
         self.assertIn("Failed to check", self.get_log())
+        self.assertServerLogIs([('HEAD', '/test.txt', 500)])
 
     def test_exists_dilettante(self):
         if len(self.storage.hosts) > 1:
@@ -239,6 +282,7 @@ class StorageTestCaseVariantsMixin(object):
         self.http_server.override_code = 202
         self.assertRaises(UnexpectedStatusCode, self.storage.exists, 'test.txt')
         self.assertIn("Failed to check", self.get_log())
+        self.assertServerLogIs([('HEAD', '/test.txt', 202)])
 
     def test_listdir(self):
         self.assertRaises(NotImplementedError, self.storage.listdir, 'test')
@@ -250,12 +294,28 @@ class StorageTestCaseVariantsMixin(object):
 
     test_modified_time_non_existing = test_modified_time
 
+    def test_open_broken(self):
+        if len(self.storage.hosts) > 1:
+            return
+        self.http_server.override_code = 500
+        self.assertRaises(urllib2.HTTPError, self.storage.open, 'test.txt')
+        self.assertIn("Failed to download", self.get_log())
+        self.assertAnyServerLogIs([('GET', '/test.txt', 500)])
+
+    def test_open_dilettante(self):
+        if len(self.storage.hosts) > 1:
+            return
+        self.http_server.override_code = 202
+        self.assertRaises(UnexpectedStatusCode, self.storage.open, 'test.txt')
+        self.assertIn("Failed to download", self.get_log())
+        self.assertAnyServerLogIs([('GET', '/test.txt', 202)])
+
     def test_path(self):
         self.assertRaises(NotImplementedError, self.storage.path, 'test.txt')
 
     # Depending on which server is used by get_available_name, this can blow
     # up with "Failed to create" or "Failed to check", so we loosen the check
-    # in the log file to the longest common prefix.
+    # in the log file to the longest common prefix and don't check queries.
     def test_save_dilettante(self):
         self.http_server.override_code = 202
         self.assertRaises(UnexpectedStatusCode, self.storage.save, 'test.txt', ContentFile('test'))
@@ -268,6 +328,7 @@ class StorageTestCaseVariantsMixin(object):
         self.create_file('test.txt', 'test')
         self.assertRaises(urllib2.HTTPError, self.storage.size, 'test.txt')
         self.assertIn("Failed to get the size", self.get_log())
+        self.assertAnyServerLogIs([('HEAD', '/test.txt', 500)])
 
     def test_size_dilettante(self):
         if len(self.storage.hosts) > 1:
@@ -276,6 +337,7 @@ class StorageTestCaseVariantsMixin(object):
         self.create_file('test.txt', 'test')
         self.assertRaises(UnexpectedStatusCode, self.storage.size, 'test.txt')
         self.assertIn("Failed to get the size", self.get_log())
+        self.assertAnyServerLogIs([('HEAD', '/test.txt', 202)])
 
 
 class CoverageTestCaseMixin(object):
