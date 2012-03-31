@@ -10,4 +10,4 @@ coverage:
 
 clean:
 	find . -name '*.pyc' -delete
-	rm -r django_resto/tests/media .coverage dist htmlcov MANIFEST
+	rm -rf django_resto/tests/media .coverage dist htmlcov MANIFEST

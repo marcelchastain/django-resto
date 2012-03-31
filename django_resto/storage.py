@@ -186,6 +186,7 @@ class DistributedStorageMixin(object):
     def execute_parallel(self, func, url, *extra):
         """Run an action over several hosts in parallel."""
         exceptions = {}
+
         def execute_one(host):
             try:
                 func(host, url, *extra)

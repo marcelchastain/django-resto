@@ -253,6 +253,7 @@ class StorageTestCaseMixin(object):
                 'http://media.example.com/test.txt')
         self.assertEachServerLogIs([])
 
+
 class StorageTestCaseVariantsMixin(object):
 
     # Adapt for DistributedStorage tests of methods that behave differently,
