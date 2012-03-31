@@ -13,7 +13,7 @@ with open(os.path.join(os.path.dirname(__file__), 'README')) as f:
 
 distutils.core.setup(
     name='django-resto',
-    version='0.3',
+    version='1.0',
     author='Aymeric Augustin',
     author_email='aymeric.augustin@m4x.org',
     url='https://github.com/aaugustin/django-resto',
