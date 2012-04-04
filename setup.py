@@ -1,6 +1,5 @@
 import distutils.core
 import os
-import os.path
 
 # Avoid polluting the .tar.gz with ._* files under Mac OS X
 os.putenv('COPYFILE_DISABLE', 'true')
