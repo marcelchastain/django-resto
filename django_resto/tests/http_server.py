@@ -1,4 +1,5 @@
 import os.path
+import socket
 import threading
 import urllib2
 
@@ -63,7 +64,8 @@ class ExtraHttpServerTestCaseMixin(object):
     def tearDown(self):
         try:
             urllib2.urlopen(StopRequest(self.alt_url), timeout=0.1)
-        except urllib2.URLError:
+        # Work around http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=663927
+        except (urllib2.URLError, socket.timeout):
             pass
         self.alt_thread.join()
         self.alt_http_server.server_close()
