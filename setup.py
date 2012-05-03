@@ -8,7 +8,7 @@ description = ('REplicated STOrage for Django, a file backend '
                'that mirrors media files to several servers over HTTP')
 
 with open(os.path.join(os.path.dirname(__file__), 'README')) as f:
-    long_description = '\n\n'.join(f.read().split('\n\n')[2:6])
+    long_description = '\n\n'.join(f.read().split('\n\n')[2:8])
 
 distutils.core.setup(
     name='django-resto',

@@ -21,6 +21,8 @@ immediately for subsequent web requests that could be routed to any machine.
 while django_dust is more concerned with availability. The two projects cover
 different use-cases.
 
+django-resto is released under the BSD license, like Django itself.
+
 .. _storage API: http://docs.djangoproject.com/en/dev/ref/files/storage/
 .. _django-resto: https://github.com/aaugustin/django-resto
 .. _django_dust: https://github.com/isagalaev/django_dust
@@ -125,7 +127,6 @@ Be aware of the consequences:
 - Checking if a file exists becomes more expensive, because it requires an HTTP
   request.
 
-
 Setup
 =====
 
@@ -215,7 +216,6 @@ Timeout in seconds for HTTP operations.
 
 This controls the maximum amount of time an upload operation can take. Note
 that all uploads run in parallel.
-
 
 Configuring the media servers
 =============================
