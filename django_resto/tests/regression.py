@@ -1,4 +1,5 @@
 # coding: utf-8
+from __future__ import unicode_literals
 
 from django.utils import unittest
 
@@ -9,7 +10,7 @@ class RegressionTestCase(
     StorageUtilitiesMixin, UseDistributedStorageMixin, unittest.TestCase):
 
     def test_non_ascii_file_name(self):
-        self.create_file(u'café.txt', 'caffeine')
-        self.assertTrue(self.storage.exists(u'café.txt'))
-        self.delete_file(u'café.txt')
-        self.assertFalse(self.storage.exists(u'café.txt'))
+        self.create_file('café.txt', b'caffeine')
+        self.assertTrue(self.storage.exists('café.txt'))
+        self.delete_file('café.txt')
+        self.assertFalse(self.storage.exists('café.txt'))

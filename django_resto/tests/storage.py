@@ -1,10 +1,15 @@
+from __future__ import unicode_literals
+
 import datetime
+import io
 import logging
 import os
 import os.path
 import shutil
-import StringIO
-import urllib2
+try:
+    from urllib.request import HTTPError
+except ImportError:
+    from urllib2 import HTTPError
 
 from django.conf import settings
 from django.core.files.base import ContentFile
@@ -18,7 +23,7 @@ class StorageUtilitiesMixin(HttpServerTestCaseMixin):
 
     def setUp(self):
         super(StorageUtilitiesMixin, self).setUp()
-        self.log = StringIO.StringIO()
+        self.log = io.StringIO()
         self.logger = logging.getLogger('django_resto.storage')
         self.handler = logging.StreamHandler(self.log)
         self.logger.addHandler(self.handler)
@@ -85,7 +90,7 @@ class StorageTestCaseMixin(object):
     # for a list of which methods a custom storage class must implement.
 
     def test_accessed_time(self):
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         self.assertIsInstance(self.storage.accessed_time('test.txt'), datetime.datetime)
         self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
@@ -94,7 +99,7 @@ class StorageTestCaseMixin(object):
         self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_created_time(self):
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         self.assertIsInstance(self.storage.created_time('test.txt'), datetime.datetime)
         self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
@@ -103,7 +108,7 @@ class StorageTestCaseMixin(object):
         self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_delete(self):
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         self.assertTrue(self.has_file('test.txt'))
         self.storage.delete('test.txt')
         self.assertFalse(self.has_file('test.txt'))
@@ -117,21 +122,21 @@ class StorageTestCaseMixin(object):
         self.assertEachServerLogIs([('DELETE', '/test.txt', 404)])
 
     def test_delete_readonly(self):
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         self.http_server.readonly = True
-        self.assertRaises(urllib2.HTTPError, self.storage.delete, 'test.txt')
+        self.assertRaises(HTTPError, self.storage.delete, 'test.txt')
         self.assertIn("Failed to delete", self.get_log())
         self.assertServerLogIs([('DELETE', '/test.txt', 403)])
 
     def test_delete_dilettante(self):
         self.http_server.override_code = 202
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         self.assertRaises(UnexpectedStatusCode, self.storage.delete, 'test.txt')
         self.assertIn("Failed to delete", self.get_log())
         self.assertServerLogIs([('DELETE', '/test.txt', 202)])
 
     def test_exists(self):
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         self.assertTrue(self.storage.exists('test.txt'))
         self.delete_file('test.txt')
         self.assertFalse(self.storage.exists('test.txt'))
@@ -149,7 +154,7 @@ class StorageTestCaseMixin(object):
             self.assertAnyServerLogIs([('HEAD', '/test.txt', 404)])
 
     def test_get_available_name_existing(self):
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         self.assertEqual(self.storage.get_available_name('test.txt'), 'test_1.txt')
         if self.use_fs:
             self.assertAnyServerLogIs([])
@@ -162,9 +167,9 @@ class StorageTestCaseMixin(object):
         self.assertEachServerLogIs([])
 
     def test_listdir(self):
-        self.create_file('test/foo.txt', 'foo')
-        self.create_file('test/bar.txt', 'bar')
-        self.create_file('test/baz/quux.txt', 'quux')
+        self.create_file('test/foo.txt', b'foo')
+        self.create_file('test/bar.txt', b'bar')
+        self.create_file('test/baz/quux.txt', b'quux')
         listing = self.storage.listdir('test')
         self.assertEqual(set(listing[0]), set(['baz']))
         self.assertEqual(set(listing[1]), set(['foo.txt', 'bar.txt']))
@@ -175,7 +180,7 @@ class StorageTestCaseMixin(object):
         self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_modified_time(self):
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         self.assertIsInstance(self.storage.modified_time('test.txt'), datetime.datetime)
         self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
@@ -184,24 +189,24 @@ class StorageTestCaseMixin(object):
         self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_open(self):
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         with self.storage.open('test.txt') as f:
-            self.assertEqual(f.read(), 'test')
+            self.assertEqual(f.read(), b'test')
         if self.use_fs:
             self.assertAnyServerLogIs([])
         else:
             self.assertAnyServerLogIs([('GET', '/test.txt', 200)])
 
     def test_path(self):
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         self.assertEqual(self.storage.path('test.txt'),
                          os.path.join(settings.MEDIA_ROOT, 'test.txt'))
         self.assertEachServerLogIs([])  # overridden when self.use_fs = False
 
     def test_save(self):
-        filename = self.storage.save('test.txt', ContentFile('test'))
+        filename = self.storage.save('test.txt', ContentFile(b'test'))
         self.assertEqual(filename, 'test.txt')
-        self.assertEqual(self.get_file('test.txt'), 'test')
+        self.assertEqual(self.get_file('test.txt'), b'test')
         if self.use_fs:
             self.assertEachServerLogIs([('PUT', '/test.txt', 201)])
         else:
@@ -209,11 +214,11 @@ class StorageTestCaseMixin(object):
                                       [('PUT', '/test.txt', 201)] * len(self.storage.hosts))
 
     def test_save_existing(self):
-        self.create_file('test.txt', 'test')
-        filename = self.storage.save('test.txt', ContentFile('test2'))
+        self.create_file('test.txt', b'test')
+        filename = self.storage.save('test.txt', ContentFile(b'test2'))
         # a new file is generated
         self.assertEqual(filename, 'test_1.txt')
-        self.assertEqual(self.get_file('test_1.txt'), 'test2')
+        self.assertEqual(self.get_file('test_1.txt'), b'test2')
         if self.use_fs:
             self.assertEachServerLogIs([('PUT', '/test_1.txt', 201)])
         else:
@@ -223,7 +228,7 @@ class StorageTestCaseMixin(object):
 
     def test_save_readonly(self):
         self.http_server.readonly = True
-        self.assertRaises(urllib2.HTTPError, self.storage.save, 'test.txt', ContentFile('test'))
+        self.assertRaises(HTTPError, self.storage.save, 'test.txt', ContentFile(b'test'))
         self.assertIn("Failed to create", self.get_log())
         if self.use_fs:
             self.assertServerLogIs([('PUT', '/test.txt', 403)])
@@ -234,13 +239,13 @@ class StorageTestCaseMixin(object):
 
     def test_save_dilettante(self):
         self.http_server.override_code = 202
-        self.assertRaises(UnexpectedStatusCode, self.storage.save, 'test.txt', ContentFile('test'))
+        self.assertRaises(UnexpectedStatusCode, self.storage.save, 'test.txt', ContentFile(b'test'))
         self.assertIn("Failed to create", self.get_log())
         # overridden in StorageTestCaseVariantsMixin
         self.assertServerLogIs([('PUT', '/test.txt', 202)])
 
     def test_size(self):
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         self.assertEqual(self.storage.size('test.txt'), 4)
         if self.use_fs:
             self.assertAnyServerLogIs([])
@@ -248,7 +253,7 @@ class StorageTestCaseMixin(object):
             self.assertAnyServerLogIs([('HEAD', '/test.txt', 200)])
 
     def test_url(self):
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         self.assertEqual(self.storage.url('test.txt'),
                 'http://media.example.com/test.txt')
         self.assertEachServerLogIs([])
@@ -273,7 +278,7 @@ class StorageTestCaseVariantsMixin(object):
         if len(self.storage.hosts) > 1:
             return
         self.http_server.override_code = 500
-        self.assertRaises(urllib2.HTTPError, self.storage.exists, 'test.txt')
+        self.assertRaises(HTTPError, self.storage.exists, 'test.txt')
         self.assertIn("Failed to check", self.get_log())
         self.assertServerLogIs([('HEAD', '/test.txt', 500)])
 
@@ -299,7 +304,7 @@ class StorageTestCaseVariantsMixin(object):
         if len(self.storage.hosts) > 1:
             return
         self.http_server.override_code = 500
-        self.assertRaises(urllib2.HTTPError, self.storage.open, 'test.txt')
+        self.assertRaises(HTTPError, self.storage.open, 'test.txt')
         self.assertIn("Failed to download", self.get_log())
         self.assertAnyServerLogIs([('GET', '/test.txt', 500)])
 
@@ -319,15 +324,15 @@ class StorageTestCaseVariantsMixin(object):
     # in the log file to the longest common prefix and don't check queries.
     def test_save_dilettante(self):
         self.http_server.override_code = 202
-        self.assertRaises(UnexpectedStatusCode, self.storage.save, 'test.txt', ContentFile('test'))
+        self.assertRaises(UnexpectedStatusCode, self.storage.save, 'test.txt', ContentFile(b'test'))
         self.assertIn("Failed to c", self.get_log())
 
     def test_size_broken(self):
         if len(self.storage.hosts) > 1:
             return
         self.http_server.override_code = 500
-        self.create_file('test.txt', 'test')
-        self.assertRaises(urllib2.HTTPError, self.storage.size, 'test.txt')
+        self.create_file('test.txt', b'test')
+        self.assertRaises(HTTPError, self.storage.size, 'test.txt')
         self.assertIn("Failed to get the size", self.get_log())
         self.assertAnyServerLogIs([('HEAD', '/test.txt', 500)])
 
@@ -335,7 +340,7 @@ class StorageTestCaseVariantsMixin(object):
         if len(self.storage.hosts) > 1:
             return
         self.http_server.override_code = 202
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         self.assertRaises(UnexpectedStatusCode, self.storage.size, 'test.txt')
         self.assertIn("Failed to get the size", self.get_log())
         self.assertAnyServerLogIs([('HEAD', '/test.txt', 202)])
@@ -353,7 +358,7 @@ class CoverageTestCaseMixin(object):
                 base_url='http://example.com/#a_fragment_does_not_make_sense')
 
     def test_open_only_for_read(self):
-        self.create_file('test.txt', 'test')
+        self.create_file('test.txt', b'test')
         self.storage._open('test.txt', 'rb').close()
         self.assertRaises(IOError, self.storage._open, 'test.txt', 'wb')
 
@@ -369,10 +374,10 @@ class CoverageTestCaseVariantsMixin(object):
             DistributedStorage.fatal_exceptions = True
 
     def test_save_over_existing_file(self):
-        self.storage._save('test.txt', ContentFile('test'))
-        self.assertEqual(self.get_file('test.txt'), 'test')
-        self.storage._save('test.txt', ContentFile('test2'))
-        self.assertEqual(self.get_file('test.txt'), 'test2')
+        self.storage._save('test.txt', ContentFile(b'test'))
+        self.assertEqual(self.get_file('test.txt'), b'test')
+        self.storage._save('test.txt', ContentFile(b'test2'))
+        self.assertEqual(self.get_file('test.txt'), b'test2')
         self.assertIn("PUT on existing file", self.get_log())
 
 

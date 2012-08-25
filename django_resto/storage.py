@@ -1,9 +1,16 @@
+from __future__ import unicode_literals
+
 import logging
 import random
+import sys
 import threading
-import urllib
-import urllib2
-import urlparse
+try:
+    from urllib.parse import quote, urljoin, urlsplit, urlunsplit
+    from urllib.request import HTTPError, Request, URLError, urlopen
+except ImportError:
+    from urllib import quote
+    from urllib2 import HTTPError, Request, URLError, urlopen
+    from urlparse import urljoin, urlsplit, urlunsplit
 
 from django.conf import settings
 from django.core.files.base import ContentFile
@@ -16,7 +23,7 @@ from .settings import get_setting
 logger = logging.getLogger(__name__)
 
 
-class UnexpectedStatusCode(urllib2.HTTPError):
+class UnexpectedStatusCode(HTTPError):
 
     """Exception raised when a server returns an unexpected status code.
 
@@ -34,26 +41,26 @@ class UnexpectedStatusCode(urllib2.HTTPError):
             resp.url, resp.code, resp.msg, resp.headers, resp.fp)
 
 
-class GetRequest(urllib2.Request):
+class GetRequest(Request):
     """HTTP GET request."""
-    # This adds nothing to urllib2, but it's there for consistency.
+    # This adds nothing to urllib, but it's there for consistency.
     def get_method(self):
         return 'GET'
 
 
-class HeadRequest(urllib2.Request):
+class HeadRequest(Request):
     """HTTP HEAD request."""
     def get_method(self):
         return 'HEAD'
 
 
-class DeleteRequest(urllib2.Request):
+class DeleteRequest(Request):
     """HTTP DELETE request."""
     def get_method(self):
         return 'DELETE'
 
 
-class PutRequest(urllib2.Request):
+class PutRequest(Request):
     """HTTP PUT request."""
     def get_method(self):
         return 'PUT'
@@ -69,7 +76,7 @@ class DefaultTransport(object):
     timeout = get_setting('TIMEOUT')
 
     def __init__(self, base_url):
-        scheme, netloc, path, query, fragment = urlparse.urlsplit(base_url)
+        scheme, netloc, path, query, fragment = urlsplit(base_url)
         if query or fragment:
             raise ValueError('base_url may not contain a query or fragment.')
         self.scheme = scheme or 'http'
@@ -77,16 +84,16 @@ class DefaultTransport(object):
 
     def get_url(self, host, name):
         """Return the full URL for a file on a given host (internal use)."""
-        path = self.path + urllib.quote(name.encode('utf-8'))
-        return urlparse.urlunsplit((self.scheme, host, path, '', ''))
+        path = self.path + quote(name.encode('utf-8'))
+        return urlunsplit((self.scheme, host, path, '', ''))
 
     def content(self, host, name):
         """Get the content of a file as a string.
 
-        urllib2.URLError will be raised if something goes wrong.
+        URLError will be raised if something goes wrong.
         """
         url = self.get_url(host, name)
-        resp = urllib2.urlopen(GetRequest(url), timeout=self.timeout)
+        resp = urlopen(GetRequest(url), timeout=self.timeout)
         if resp.code != 200:
             raise UnexpectedStatusCode(resp)
         length = resp.info().get('Content-Length')
@@ -100,15 +107,15 @@ class DefaultTransport(object):
 
         Return True if the file exists, False if it doesn't.
 
-        urllib2.URLError will be raised if something goes wrong.
+        URLError will be raised if something goes wrong.
         """
         url = self.get_url(host, name)
         try:
-            resp = urllib2.urlopen(HeadRequest(url), timeout=self.timeout)
+            resp = urlopen(HeadRequest(url), timeout=self.timeout)
             if resp.code != 200:
                 raise UnexpectedStatusCode(resp)
             return True
-        except urllib2.HTTPError, e:
+        except HTTPError as e:
             if e.code not in (404, 410):
                 raise
             return False
@@ -118,10 +125,10 @@ class DefaultTransport(object):
 
         This method relies on the Content-Length header.
 
-        urllib2.URLError will be raised if something goes wrong.
+        URLError will be raised if something goes wrong.
         """
         url = self.get_url(host, name)
-        resp = urllib2.urlopen(HeadRequest(url), timeout=self.timeout)
+        resp = urlopen(HeadRequest(url), timeout=self.timeout)
         if resp.code != 200:
             raise UnexpectedStatusCode(resp)
         length = resp.info().get('Content-Length')
@@ -135,10 +142,10 @@ class DefaultTransport(object):
 
         Return True if the file existed, False if it did not.
 
-        urllib2.URLError will be raised if something goes wrong.
+        URLError will be raised if something goes wrong.
         """
         url = self.get_url(host, name)
-        resp = urllib2.urlopen(PutRequest(url, content), timeout=self.timeout)
+        resp = urlopen(PutRequest(url, content), timeout=self.timeout)
         if resp.code == 201:
             return False
         elif resp.code == 204:
@@ -152,15 +159,15 @@ class DefaultTransport(object):
 
         Return True if the file existed, False if it did not.
 
-        urllib2.URLError will be raised if something goes wrong.
+        URLError will be raised if something goes wrong.
         """
         url = self.get_url(host, name)
         try:
-            resp = urllib2.urlopen(DeleteRequest(url), timeout=self.timeout)
+            resp = urlopen(DeleteRequest(url), timeout=self.timeout)
             if resp.code not in (200, 204):
                 raise UnexpectedStatusCode(resp)
             return True
-        except urllib2.HTTPError, e:
+        except HTTPError as e:
             if e.code not in (404, 410):
                 raise
             logger.warning("DELETE on missing file %s on %s.", name, host)
@@ -190,8 +197,8 @@ class DistributedStorageMixin(object):
         def execute_one(host):
             try:
                 func(host, url, *extra)
-            except Exception, exc:
-                exceptions[host] = exc
+            except Exception as exc:
+                exceptions[host] = sys.exc_info()
 
         threads = [threading.Thread(target=execute_one, args=(host,))
                 for host in self.hosts]
@@ -200,13 +207,13 @@ class DistributedStorageMixin(object):
         for thread in threads:
             thread.join()
 
-        for host, exception in exceptions.iteritems():
-            logger.error("Failed to %s %s on %s.", func.func_name, url, host,
-                exc_info=self.exc_info)
+        for host, exc_info in exceptions.items():
+            logger.error("Failed to %s %s on %s.", func.__name__, url, host,
+                exc_info=exc_info)
 
         if exceptions and self.fatal_exceptions:
-            # Let's raise the first exception, we've logged them all anyway
-            raise exceptions.itervalues().next()
+            # Let's raise a random exception, we've logged them all anyway
+            raise exceptions.popitem()[1][1]
 
     ### Hooks for custom storage objects
 
@@ -218,7 +225,7 @@ class DistributedStorageMixin(object):
         host = random.choice(self.hosts)
         try:
             return ContentFile(self.transport.content(host, name))
-        except urllib2.URLError:
+        except URLError:
             logger.error("Failed to download %s from %s.", name, host,
                     exc_info=self.exc_info)
             raise
@@ -242,7 +249,7 @@ class DistributedStorageMixin(object):
         host = random.choice(self.hosts)
         try:
             return self.transport.exists(host, name)
-        except urllib2.URLError:
+        except URLError:
             logger.error("Failed to check if %s exists on %s.", name, host,
                     exc_info=self.exc_info)
             raise
@@ -254,13 +261,13 @@ class DistributedStorageMixin(object):
         host = random.choice(self.hosts)
         try:
             return self.transport.size(host, name)
-        except urllib2.URLError:
+        except URLError:
             logger.error("Failed to get the size of %s from %s.", name, host,
                     exc_info=self.exc_info)
             raise
 
     def url(self, name):
-        return urlparse.urljoin(self.base_url, filepath_to_uri(name))
+        return urljoin(self.base_url, filepath_to_uri(name))
 
 
 class DistributedStorage(DistributedStorageMixin, Storage):

@@ -1,15 +1,22 @@
-import BaseHTTPServer
-import urllib
-import urllib2
+from __future__ import unicode_literals
+
+try:
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from urllib.parse import unquote
+    from urllib.request import Request
+except ImportError:
+    from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+    from urllib import unquote
+    from urllib2 import Request
 
 
-class StopRequest(urllib2.Request):
+class StopRequest(Request):
     """Non-standard HTTP request, used to stop the test server."""
     def get_method(self):
         return 'STOP'
 
 
-class TestHttpServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+class TestHttpServerRequestHandler(BaseHTTPRequestHandler):
 
     """Request handler for the test HTTP server.
 
@@ -18,7 +25,10 @@ class TestHttpServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     @property
     def filename(self):
-        return urllib.unquote(self.path.lstrip('/')).decode('utf-8')
+        if isinstance(self.path, bytes):                # Python 2
+            return unquote(self.path.lstrip(b'/')).decode('utf-8')
+        else:
+            return unquote(self.path.lstrip('/'))
 
     @property
     def content(self):
@@ -79,11 +89,11 @@ class TestHttpServerRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         pass    # disable logging
 
     def send_response(self, code, message=None):
-        BaseHTTPServer.BaseHTTPRequestHandler.send_response(self,
+        BaseHTTPRequestHandler.send_response(self,
             self.server.override_code or code, message)
 
 
-class TestHttpServer(BaseHTTPServer.HTTPServer):
+class TestHttpServer(HTTPServer):
 
     """Test HTTP server.
 
@@ -105,8 +115,7 @@ class TestHttpServer(BaseHTTPServer.HTTPServer):
         self.log = []
         self.override_code = None
         self.readonly = False
-        BaseHTTPServer.HTTPServer.__init__(self, (host, port),
-                TestHttpServerRequestHandler)
+        HTTPServer.__init__(self, (host, port), TestHttpServerRequestHandler)
 
     def has_file(self, name):
         return name in self.files

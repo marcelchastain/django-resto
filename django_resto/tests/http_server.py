@@ -1,6 +1,13 @@
+from __future__ import unicode_literals
+
 import os.path
+import socket
 import threading
-import urllib2
+try:
+    from urllib.request import URLError, urlopen
+except ImportError:
+    from urllib2 import URLError, urlopen
+
 
 from django.conf import settings
 from django.utils import unittest
@@ -28,17 +35,17 @@ class HttpServerTestCaseMixin(object):
     def tearDown(self):
         super(HttpServerTestCaseMixin, self).tearDown()
         try:
-            urllib2.urlopen(StopRequest(self.url), timeout=0.1)
-        except urllib2.URLError:
+            urlopen(StopRequest(self.url), timeout=0.1)
+        except (URLError, socket.timeout):
             pass
         self.http_server.server_close()
 
     def assertHttpSuccess(self, *args):
-        return urllib2.urlopen(*args).read()    # urllib2.URLError not raised.
+        return urlopen(*args).read()            # URLError not raised.
 
-    def assertHttpErrorCode(self, code, *args):
-        with self.assertRaises(urllib2.URLError) as context:
-            urllib2.urlopen(*args)
+    def assertHTTPErrorCode(self, code, *args):
+        with self.assertRaises(URLError) as context:
+            urlopen(*args)
         self.assertEqual(context.exception.code, code, 'Expected HTTP %d, '
                 'got HTTP %d' % (code, context.exception.code))
 
@@ -62,8 +69,8 @@ class ExtraHttpServerTestCaseMixin(object):
 
     def tearDown(self):
         try:
-            urllib2.urlopen(StopRequest(self.alt_url), timeout=0.1)
-        except urllib2.URLError:
+            urlopen(StopRequest(self.alt_url), timeout=0.1)
+        except (URLError, socket.timeout):
             pass
         self.alt_thread.join()
         self.alt_http_server.server_close()
@@ -97,20 +104,20 @@ def search_merge(log, log1, log2):
 class HttpServerTestCase(HttpServerTestCaseMixin, unittest.TestCase):
 
     def test_get(self):
-        self.assertHttpErrorCode(404, GetRequest(self.url))
-        self.http_server.create_file(self.filename, 'test')
+        self.assertHTTPErrorCode(404, GetRequest(self.url))
+        self.http_server.create_file(self.filename, b'test')
         body = self.assertHttpSuccess(GetRequest(self.url))
-        self.assertEqual(body, 'test')
+        self.assertEqual(body, b'test')
         self.assertServerLogIs([
             ('GET', self.path, 404),
             ('GET', self.path, 200),
         ])
 
     def test_head(self):
-        self.assertHttpErrorCode(404, HeadRequest(self.url))
-        self.http_server.create_file(self.filename, 'test')
+        self.assertHTTPErrorCode(404, HeadRequest(self.url))
+        self.http_server.create_file(self.filename, b'test')
         body = self.assertHttpSuccess(HeadRequest(self.url))
-        self.assertEqual(body, '')
+        self.assertEqual(body, b'')
         self.assertServerLogIs([
             ('HEAD', self.path, 404),
             ('HEAD', self.path, 200),
@@ -118,16 +125,16 @@ class HttpServerTestCase(HttpServerTestCaseMixin, unittest.TestCase):
 
     def test_delete(self):
         # delete a non-existing file
-        self.assertHttpErrorCode(404, DeleteRequest(self.url))
+        self.assertHTTPErrorCode(404, DeleteRequest(self.url))
         # delete an existing file
-        self.http_server.create_file(self.filename, 'test')
+        self.http_server.create_file(self.filename, b'test')
         body = self.assertHttpSuccess(DeleteRequest(self.url))
-        self.assertEqual(body, '')
+        self.assertEqual(body, b'')
         self.assertFalse(self.http_server.has_file(self.filename))
         # attempt to put in read-only mode
-        self.http_server.create_file(self.filename, 'test')
+        self.http_server.create_file(self.filename, b'test')
         self.http_server.readonly = True
-        self.assertHttpErrorCode(403, DeleteRequest(self.url, 'test'))
+        self.assertHTTPErrorCode(403, DeleteRequest(self.url, b'test'))
         self.assertServerLogIs([
             ('DELETE', self.path, 404),
             ('DELETE', self.path, 204),
@@ -136,16 +143,16 @@ class HttpServerTestCase(HttpServerTestCaseMixin, unittest.TestCase):
 
     def test_put(self):
         # put a non-existing file
-        body = self.assertHttpSuccess(PutRequest(self.url, 'test'))
-        self.assertEqual(body, '')
-        self.assertEqual(self.http_server.get_file(self.filename), 'test')
+        body = self.assertHttpSuccess(PutRequest(self.url, b'test'))
+        self.assertEqual(body, b'')
+        self.assertEqual(self.http_server.get_file(self.filename), b'test')
         # put an existing file
-        body = self.assertHttpSuccess(PutRequest(self.url, 'test2'))
-        self.assertEqual(body, '')
-        self.assertEqual(self.http_server.get_file(self.filename), 'test2')
+        body = self.assertHttpSuccess(PutRequest(self.url, b'test2'))
+        self.assertEqual(body, b'')
+        self.assertEqual(self.http_server.get_file(self.filename), b'test2')
         # attempt to put in read-only mode
         self.http_server.readonly = True
-        self.assertHttpErrorCode(403, PutRequest(self.url, 'test'))
+        self.assertHTTPErrorCode(403, PutRequest(self.url, b'test'))
         self.assertServerLogIs([
             ('PUT', self.path, 201),
             ('PUT', self.path, 204),
