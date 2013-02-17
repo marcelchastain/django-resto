@@ -5,6 +5,7 @@ import io
 import logging
 import os
 import os.path
+import pickle
 import shutil
 try:
     from urllib.request import HTTPError
@@ -346,10 +347,18 @@ class StorageTestCaseVariantsMixin(object):
         self.assertAnyServerLogIs([('HEAD', '/test.txt', 202)])
 
 
-class CoverageTestCaseMixin(object):
+class MiscTestCaseMixin(object):
+
+    # Ensure the storage backends are pickleable, for task queues.
+
+    def test_pickle(self):
+        pickled = pickle.dumps(self.storage, pickle.HIGHEST_PROTOCOL)
+        unpickled = pickle.loads(pickled)
+        self.assertEqual(type(unpickled), type(self.storage))
+        self.assertEqual(unpickled.hosts, self.storage.hosts)
 
     # This test case exercises some code paths that are not stressed by the
-    # main tests because they handle unexpected situations.
+    # main tests because they handle unexpected situations. For coverage.
 
     def test_invalid_base_url(self):
         self.assertRaises(ValueError, self.storage_class,
@@ -363,7 +372,7 @@ class CoverageTestCaseMixin(object):
         self.assertRaises(IOError, self.storage._open, 'test.txt', 'wb')
 
 
-class CoverageTestCaseVariantsMixin(object):
+class MiscTestCaseVariantsMixin(object):
 
     def test_fatal_exceptions_disabled(self):
         DistributedStorage.fatal_exceptions = False
@@ -425,16 +434,16 @@ class HybridStorageWithTwoServersTestCase(
     pass
 
 
-class DistributedStorageCoverageTestCase(
-        CoverageTestCaseVariantsMixin, CoverageTestCaseMixin,
+class DistributedStorageMiscTestCase(
+        MiscTestCaseVariantsMixin, MiscTestCaseMixin,
         StorageUtilitiesMixin,
         UseDistributedStorageMixin, unittest.TestCase):
 
     pass
 
 
-class HybridStorageCoverageTestCase(
-        CoverageTestCaseMixin,
+class HybridStorageMiscTestCase(
+        MiscTestCaseMixin,
         StorageUtilitiesMixin,
         UseHybridStorageMixin, unittest.TestCase):
 

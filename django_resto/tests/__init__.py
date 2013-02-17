@@ -8,5 +8,5 @@ from .storage import DistributedStorageTestCase
 from .storage import HybridStorageTestCase
 from .storage import DistributedStorageWithTwoServersTestCase
 from .storage import HybridStorageWithTwoServersTestCase
-from .storage import DistributedStorageCoverageTestCase
-from .storage import HybridStorageCoverageTestCase
+from .storage import DistributedStorageMiscTestCase
+from .storage import HybridStorageMiscTestCase
