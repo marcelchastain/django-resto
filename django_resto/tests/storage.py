@@ -239,7 +239,8 @@ class HybridStorageTestCaseMixin(object):
     def test_save_readonly(self):
         self.http_server.readonly = True
         self.assertRaises(HTTPError, self.storage.save, 'test.txt', ContentFile(b'test'))
-        self.assertIn("Failed to create", self.get_log())
+        action = 'upload' if self.use_fs else 'create'
+        self.assertIn("Failed to %s" % action, self.get_log())
         if self.use_fs:
             self.assertServerLogIs([('PUT', '/test.txt', 403)])
         else:
@@ -250,7 +251,8 @@ class HybridStorageTestCaseMixin(object):
     def test_save_dilettante(self):
         self.http_server.override_code = 202
         self.assertRaises(UnexpectedStatusCode, self.storage.save, 'test.txt', ContentFile(b'test'))
-        self.assertIn("Failed to create", self.get_log())
+        action = 'upload' if self.use_fs else 'create'
+        self.assertIn("Failed to %s" % action, self.get_log())
         # overridden in DistributedStorageTestCaseMixin
         self.assertServerLogIs([('PUT', '/test.txt', 202)])
 
@@ -293,14 +295,14 @@ class AsyncStorageTestCaseMixin(HybridStorageTestCaseMixin):
         self.http_server.readonly = True
         # Exceptions aren't checked
         self.storage.save('test.txt', ContentFile(b'test'))
-        self.assertIn("Failed to create", self.get_log())
+        self.assertIn("Failed to upload", self.get_log())
         self.assertServerLogIs([('PUT', '/test.txt', 403)])
 
     def test_save_dilettante(self):
         self.http_server.override_code = 202
         # Exceptions aren't checked
         self.storage.save('test.txt', ContentFile(b'test'))
-        self.assertIn("Failed to create", self.get_log())
+        self.assertIn("Failed to upload", self.get_log())
         self.assertServerLogIs([('PUT', '/test.txt', 202)])
 
 

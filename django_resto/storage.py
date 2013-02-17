@@ -308,12 +308,16 @@ class HybridStorage(DistributedStorageMixin, FileSystemStorage):
 
     def _save(self, name, content):
         name = FileSystemStorage._save(self, name, content)
-        content.seek(0)
         # After this line, we will assume that 'name' is available on the
         # media servers. This could be wrong if a delete for this file name
         # failed at some point in the past.
-        self.execute(self.transport.create, name, content.read())
+        self.execute(self.upload, name)
         return name
+
+    # Make this a separate method so it can be passed to a task queue.
+    def upload(self, host, name):
+        with self.open(name) as handle:
+            self.transport.create(host, name, handle.read())
 
     ### Mandatory methods
 
@@ -344,4 +348,4 @@ class AsyncStorage(HybridStorage):
                 action = func.__name__
                 logger.error("Failed to %s %s on %s.", action, url, host,
                         exc_info=self.show_traceback)
-        threading.Thread(target=execute_inner).start()
+        return threading.Thread(target=execute_inner).start()
