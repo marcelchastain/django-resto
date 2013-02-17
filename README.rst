@@ -121,6 +121,23 @@ It improves response times, but it has two drawbacks:
 - No error handling: ``RESTO_FATAL_EXCEPTIONS`` is ignored and upload errors
   are always logged.
 
+This works best in combination with a task queue. To use django-resto with a
+task queue, all you need is to subclass ``AsyncStorage`` and override its
+``execute_one`` method. For instance, the following should work with rq_::
+
+    from django_resto.storage import AsyncStorage
+    from redis import Redis
+    from rq import Queue
+
+    queue = Queue(connection=Redis())
+
+    class RqAsyncStorage(AsyncStorage):
+
+        def execute_one(self, func, *args, **kwargs):
+            return queue.enqueue(func, *args, **kwargs)
+
+.. _rq: http://python-rq.org/
+
 Low concurrency situations
 --------------------------
 
