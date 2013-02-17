@@ -4,10 +4,11 @@ README
 Introduction
 ============
 
-django-resto (REplicated STOrage) provides file storage backends that can store
-files coming into a Django site on several servers simultaneously, using HTTP.
-``HybridStorage`` will store the files locally on the filesystem and remotely,
-while ``DistributedStorage`` will only store them remotely.
+django-resto (REplicated STOrage) provides file storage backends that can
+store files coming into a Django site on several servers in parallel, using
+HTTP. ``HybridStorage`` and ``AsyncStorage`` will store the files locally on
+the filesystem and remotely, while ``DistributedStorage`` will only store them
+remotely.
 
 This works for files uploaded by users through the admin or through custom
 Django forms, and also for files created by the application code, provided it
@@ -15,11 +16,10 @@ uses the standard `storage API`_.
 
 django-resto is useful for sites deployed in a multi-server environment, in
 order to accept uploaded files and have them available on all media servers
-immediately for subsequent web requests that could be routed to any machine.
+for subsequent web requests that could be routed to any machine.
 
-`django-resto`_ is a fork of `django_dust`_ with a strong focus on consistency,
-while django_dust is more concerned with availability. The two projects cover
-different use-cases.
+`django-resto`_ is a fork of `django_dust`_ with a strong focus on
+consistency, while django_dust is more concerned with availability.
 
 django-resto is released under the BSD license, like Django itself.
 
@@ -68,8 +68,8 @@ trade-off between the following properties:
   plain HTTP, which doesn't provide transaction support, all the more with
   several hosts. However, it targets *eventual consistency*.
 - **Availability**: django-resto generally improves the system's availability
-  by replicating the data on several servers. Also, it parallelizes storage
-  actions to minimize response time.
+  by replicating the data on several servers. It parallelizes storage actions
+  to minimize response time. It also provides an asynchronous mode.
 - **Partition tolerance**: django-resto is designed to cope with hardware or
   network failure. You can choose to maximize availability or consistency when
   such problems occur.
@@ -107,6 +107,20 @@ feature was removed in django-resto. It is prone to data loss, because the
 order of ``PUT`` and ``DELETE`` operations matters, and retrying failed
 operations later breaks the order. So, use ``rsync`` instead, it's fast enough.
 
+Asynchronous operation
+----------------------
+
+Once the master copy of a file is saved, you may prefer to upload it to the
+media servers in the background and continue your processing in the meantime.
+This behavior is implemented by ``AsyncStorage``.
+
+It improves response times, but it has two drawbacks:
+
+- Replication lag: a client might be unable to access a file that was just
+  uploaded because it hasn't been transferred to the media servers yet.
+- No error handling: ``RESTO_FATAL_EXCEPTIONS`` is ignored and upload errors
+  are always logged.
+
 Low concurrency situations
 --------------------------
 
@@ -133,7 +147,8 @@ Setup
 Installation guide
 ------------------
 
-django-resto requires Python 2.6 or 2.7.
+django-resto requires Python 2.6, 2.7, 3.2 or 3.3. It works with all currently
+supported versions of Django.
 
 1.  Download and install the package from PyPI::
 
@@ -163,13 +178,20 @@ django-resto requires Python 2.6 or 2.7.
 Backends
 --------
 
-django-resto defines two backends in ``django_resto.storage``.
+django-resto defines three backends in ``django_resto.storage``.
 
 ``HybridStorage``
 .................
 
 With this backend, django-resto will run all file storage operations on
 ``MEDIA_ROOT`` first, then replicate them to the media servers.
+
+``AsyncStorage``
+.................
+
+With this backend, django-resto will run all file storage operations on
+``MEDIA_ROOT`` and lanch their replication to the media servers in the
+background. See `Asynchronous operation`_.
 
 ``DistributedStorage``
 ......................

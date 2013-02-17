@@ -13,6 +13,7 @@ except ImportError:
     from urlparse import urljoin, urlsplit, urlunsplit
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.core.files.base import ContentFile
 from django.core.files.storage import Storage, FileSystemStorage
 from django.utils.encoding import filepath_to_uri
@@ -190,17 +191,17 @@ class DistributedStorageMixin(object):
         self.base_url = base_url
         self.transport = DefaultTransport(base_url=self.base_url)
 
-    def execute_parallel(self, func, url, *extra):
+    def execute(self, func, url, *args, **kwargs):
         """Run an action over several hosts in parallel."""
         exceptions = {}
 
-        def execute_one(host):
+        def execute_inner(host):
             try:
-                func(host, url, *extra)
-            except Exception as exc:
+                func(host, url, *args, **kwargs)
+            except Exception:
                 exceptions[host] = sys.exc_info()
 
-        threads = [threading.Thread(target=execute_one, args=(host,))
+        threads = [threading.Thread(target=execute_inner, args=(host,))
                 for host in self.hosts]
         for thread in threads:
             thread.start()
@@ -208,7 +209,8 @@ class DistributedStorageMixin(object):
             thread.join()
 
         for host, exc_info in exceptions.items():
-            logger.error("Failed to %s %s on %s.", func.__name__, url, host,
+            action = func.__name__
+            logger.error("Failed to %s %s on %s.", action, url, host,
                 exc_info=exc_info)
 
         if exceptions and self.fatal_exceptions:
@@ -248,7 +250,7 @@ class DistributedStorage(DistributedStorageMixin, Storage):
     def _save(self, name, content):
         # It's hard to avoid buffering the whole file in memory,
         # because different threads will read it simultaneously.
-        self.execute_parallel(self.transport.create, name, content.read())
+        self.execute(self.transport.create, name, content.read())
         return name
 
     ### Mandatory methods
@@ -257,7 +259,7 @@ class DistributedStorage(DistributedStorageMixin, Storage):
     # in Storage are OK for DistributedStorage.
 
     def delete(self, name):
-        self.execute_parallel(self.transport.delete, name)
+        self.execute(self.transport.delete, name)
 
     def exists(self, name):
         host = random.choice(self.hosts)
@@ -310,7 +312,7 @@ class HybridStorage(DistributedStorageMixin, FileSystemStorage):
         # After this line, we will assume that 'name' is available on the
         # media servers. This could be wrong if a delete for this file name
         # failed at some point in the past.
-        self.execute_parallel(self.transport.create, name, content.read())
+        self.execute(self.transport.create, name, content.read())
         return name
 
     ### Mandatory methods
@@ -320,4 +322,25 @@ class HybridStorage(DistributedStorageMixin, FileSystemStorage):
 
     def delete(self, name):
         FileSystemStorage.delete(self, name)
-        self.execute_parallel(self.transport.delete, name)
+        self.execute(self.transport.delete, name)
+
+
+class AsyncStorage(HybridStorage):
+
+    """Backend that stores files both locally and remotely over HTTP."""
+
+    def execute(self, func, url, *args, **kwargs):
+        """Run an action over several hosts asynchronously."""
+        for host in self.hosts:
+            self.execute_one(func, host, url, *args, **kwargs)
+
+    def execute_one(self, func, host, url, *args, **kwargs):
+        """Run a single action asynchronously."""
+        def execute_inner():
+            # Insert a delay here to actually test the asynchronous behavior.
+            try:
+                func(host, url, *args, **kwargs)
+            except Exception:
+                action = func.__name__
+                logger.exception("Failed to %s %s on %s.", action, url, host)
+        threading.Thread(target=execute_inner).start()

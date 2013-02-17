@@ -7,6 +7,8 @@ import os
 import os.path
 import pickle
 import shutil
+import threading
+import time
 try:
     from urllib.request import HTTPError
 except ImportError:
@@ -16,7 +18,8 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.utils import unittest
 
-from ..storage import DistributedStorage, HybridStorage, UnexpectedStatusCode
+from ..storage import (DistributedStorage, HybridStorage, AsyncStorage,
+        UnexpectedStatusCode)
 from .http_server import HttpServerTestCaseMixin, ExtraHttpServerTestCaseMixin
 
 
@@ -38,14 +41,20 @@ class StorageUtilitiesMixin(HttpServerTestCaseMixin):
         if self.use_fs:
             shutil.rmtree(settings.MEDIA_ROOT)
 
+    def sync(self):
+        pass
+
     def get_log(self):
+        self.sync()
         self.handler.flush()
         return self.log.getvalue()
 
     def has_file(self, name):
+        self.sync()
         return self.http_server.has_file(name)
 
     def get_file(self, name):
+        self.sync()
         return self.http_server.get_file(name)
 
     def create_file(self, name, content):
@@ -81,7 +90,7 @@ class StorageUtilitiesWithTwoServersMixin(
         super(StorageUtilitiesWithTwoServersMixin, self).delete_file(name)
 
 
-class StorageTestCaseMixin(object):
+class HybridStorageTestCaseMixin(object):
 
     # Tests for HybridStorage, see variants for DistributedStorage below
 
@@ -242,7 +251,7 @@ class StorageTestCaseMixin(object):
         self.http_server.override_code = 202
         self.assertRaises(UnexpectedStatusCode, self.storage.save, 'test.txt', ContentFile(b'test'))
         self.assertIn("Failed to create", self.get_log())
-        # overridden in StorageTestCaseVariantsMixin
+        # overridden in DistributedStorageTestCaseMixin
         self.assertServerLogIs([('PUT', '/test.txt', 202)])
 
     def test_size(self):
@@ -260,7 +269,42 @@ class StorageTestCaseMixin(object):
         self.assertEachServerLogIs([])
 
 
-class StorageTestCaseVariantsMixin(object):
+class AsyncStorageTestCaseMixin(HybridStorageTestCaseMixin):
+
+    # Adapt for DistributedStorage tests of methods that behave differently.
+
+    def test_delete_readonly(self):
+        self.create_file('test.txt', b'test')
+        self.http_server.readonly = True
+        # Exceptions aren't checked
+        self.storage.delete('test.txt')
+        self.assertIn("Failed to delete", self.get_log())
+        self.assertServerLogIs([('DELETE', '/test.txt', 403)])
+
+    def test_delete_dilettante(self):
+        self.http_server.override_code = 202
+        self.create_file('test.txt', b'test')
+        # Exceptions aren't checked
+        self.storage.delete('test.txt')
+        self.assertIn("Failed to delete", self.get_log())
+        self.assertServerLogIs([('DELETE', '/test.txt', 202)])
+
+    def test_save_readonly(self):
+        self.http_server.readonly = True
+        # Exceptions aren't checked
+        self.storage.save('test.txt', ContentFile(b'test'))
+        self.assertIn("Failed to create", self.get_log())
+        self.assertServerLogIs([('PUT', '/test.txt', 403)])
+
+    def test_save_dilettante(self):
+        self.http_server.override_code = 202
+        # Exceptions aren't checked
+        self.storage.save('test.txt', ContentFile(b'test'))
+        self.assertIn("Failed to create", self.get_log())
+        self.assertServerLogIs([('PUT', '/test.txt', 202)])
+
+
+class DistributedStorageTestCaseMixin(HybridStorageTestCaseMixin):
 
     # Adapt for DistributedStorage tests of methods that behave differently,
     # and disable tests that aren't deterministic with an inconsistent state.
@@ -347,7 +391,7 @@ class StorageTestCaseVariantsMixin(object):
         self.assertAnyServerLogIs([('HEAD', '/test.txt', 202)])
 
 
-class MiscTestCaseMixin(object):
+class CommonMiscTestCaseMixin(object):
 
     # Ensure the storage backends are pickleable, for task queues.
 
@@ -356,6 +400,9 @@ class MiscTestCaseMixin(object):
         unpickled = pickle.loads(pickled)
         self.assertEqual(type(unpickled), type(self.storage))
         self.assertEqual(unpickled.hosts, self.storage.hosts)
+
+
+class HybridMiscTestCaseMixin(CommonMiscTestCaseMixin):
 
     # This test case exercises some code paths that are not stressed by the
     # main tests because they handle unexpected situations. For coverage.
@@ -372,7 +419,12 @@ class MiscTestCaseMixin(object):
         self.assertRaises(IOError, self.storage._open, 'test.txt', 'wb')
 
 
-class MiscTestCaseVariantsMixin(object):
+class AsyncMiscTestCaseMixin(HybridMiscTestCaseMixin):
+
+    pass
+
+
+class DistributedMiscTestCaseMixin(CommonMiscTestCaseMixin):
 
     def test_fatal_exceptions_disabled(self):
         DistributedStorage.fatal_exceptions = False
@@ -402,49 +454,75 @@ class UseHybridStorageMixin(object):
     use_fs = True
 
 
+class UseAsyncStorageMixin(object):
+
+    storage_class = AsyncStorage
+    use_fs = True
+
+    def sync(self):
+        # Wait until only the main thread and the HTTP servers are running.
+        while threading.active_count() > 1 + getattr(self, 'num_threads', 0):
+            time.sleep(0.001)
+
+
 class DistributedStorageTestCase(
-        StorageTestCaseVariantsMixin, StorageTestCaseMixin,
-        StorageUtilitiesMixin,
-        UseDistributedStorageMixin, unittest.TestCase):
+        UseDistributedStorageMixin, DistributedStorageTestCaseMixin,
+        StorageUtilitiesMixin, unittest.TestCase):
 
     pass
 
 
 class HybridStorageTestCase(
-        StorageTestCaseMixin,
-        StorageUtilitiesMixin,
-        UseHybridStorageMixin, unittest.TestCase):
+        UseHybridStorageMixin, HybridStorageTestCaseMixin,
+        StorageUtilitiesMixin, unittest.TestCase):
+
+    pass
+
+
+class AsyncStorageTestCase(
+        UseAsyncStorageMixin, AsyncStorageTestCaseMixin,
+        StorageUtilitiesMixin, unittest.TestCase):
 
     pass
 
 
 class DistributedStorageWithTwoServersTestCase(
-        StorageTestCaseVariantsMixin, StorageTestCaseMixin,
-        StorageUtilitiesWithTwoServersMixin,
-        UseDistributedStorageMixin, unittest.TestCase):
+        UseDistributedStorageMixin, DistributedStorageTestCaseMixin,
+        StorageUtilitiesWithTwoServersMixin, unittest.TestCase):
 
     pass
 
 
 class HybridStorageWithTwoServersTestCase(
-        StorageTestCaseMixin,
-        StorageUtilitiesWithTwoServersMixin,
-        UseHybridStorageMixin, unittest.TestCase):
+        UseHybridStorageMixin, HybridStorageTestCaseMixin,
+        StorageUtilitiesWithTwoServersMixin, unittest.TestCase):
+
+    pass
+
+
+class AsyncStorageWithTwoServersTestCase(
+        UseAsyncStorageMixin, AsyncStorageTestCaseMixin,
+        StorageUtilitiesWithTwoServersMixin, unittest.TestCase):
 
     pass
 
 
 class DistributedStorageMiscTestCase(
-        MiscTestCaseVariantsMixin, MiscTestCaseMixin,
-        StorageUtilitiesMixin,
-        UseDistributedStorageMixin, unittest.TestCase):
+        UseDistributedStorageMixin, DistributedMiscTestCaseMixin,
+        StorageUtilitiesMixin, unittest.TestCase):
 
     pass
 
 
 class HybridStorageMiscTestCase(
-        MiscTestCaseMixin,
-        StorageUtilitiesMixin,
-        UseHybridStorageMixin, unittest.TestCase):
+        UseHybridStorageMixin, HybridMiscTestCaseMixin,
+        StorageUtilitiesMixin, unittest.TestCase):
+
+    pass
+
+
+class AsyncStorageMiscTestCase(
+        UseAsyncStorageMixin, AsyncMiscTestCaseMixin,
+        StorageUtilitiesMixin, unittest.TestCase):
 
     pass

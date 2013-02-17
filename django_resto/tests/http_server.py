@@ -24,6 +24,7 @@ class HttpServerTestCaseMixin(object):
     path = '/' + filename
     url = 'http://%s:%d%s' % (host, port, path)
     filepath = os.path.join(settings.MEDIA_ROOT, filename)
+    num_threads = 1
 
     def setUp(self):
         super(HttpServerTestCaseMixin, self).setUp()
@@ -49,7 +50,11 @@ class HttpServerTestCaseMixin(object):
         self.assertEqual(context.exception.code, code, 'Expected HTTP %d, '
                 'got HTTP %d' % (code, context.exception.code))
 
+    def sync(self):
+        pass
+
     def assertServerLogIs(self, log):
+        self.sync()
         self.assertEqual(log, self.http_server.log)
 
     assertEachServerLogIs = assertServerLogIs
@@ -58,6 +63,8 @@ class HttpServerTestCaseMixin(object):
 
 
 class ExtraHttpServerTestCaseMixin(object):
+
+    num_threads = 2
 
     def setUp(self):
         super(ExtraHttpServerTestCaseMixin, self).setUp()
@@ -77,13 +84,16 @@ class ExtraHttpServerTestCaseMixin(object):
         super(ExtraHttpServerTestCaseMixin, self).tearDown()
 
     def assertAltServerLogIs(self, log):
+        self.sync()
         self.assertEqual(log, self.alt_http_server.log)
 
     def assertEachServerLogIs(self, log):
+        self.sync()
         self.assertServerLogIs(log)
         self.assertAltServerLogIs(log)
 
     def assertAnyServerLogIs(self, log):
+        self.sync()
         return search_merge(log, self.http_server.log, self.alt_http_server.log)
 
 
