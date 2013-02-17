@@ -180,7 +180,7 @@ class DistributedStorageMixin(object):
     """Mixin for storage backends that distribute files on several servers."""
 
     fatal_exceptions = get_setting('FATAL_EXCEPTIONS')
-    exc_info = get_setting('SHOW_TRACEBACK')
+    show_traceback = get_setting('SHOW_TRACEBACK')
 
     def __init__(self, hosts=None, base_url=None):
         if hosts is None:                                   # cover: disable
@@ -211,7 +211,7 @@ class DistributedStorageMixin(object):
         for host, exc_info in exceptions.items():
             action = func.__name__
             logger.error("Failed to %s %s on %s.", action, url, host,
-                exc_info=exc_info)
+                    exc_info=exc_info if self.show_traceback else None)
 
         if exceptions and self.fatal_exceptions:
             # Let's raise a random exception, we've logged them all anyway
@@ -244,7 +244,7 @@ class DistributedStorage(DistributedStorageMixin, Storage):
             return ContentFile(self.transport.content(host, name))
         except URLError:
             logger.error("Failed to download %s from %s.", name, host,
-                    exc_info=self.exc_info)
+                    exc_info=self.show_traceback)
             raise
 
     def _save(self, name, content):
@@ -267,7 +267,7 @@ class DistributedStorage(DistributedStorageMixin, Storage):
             return self.transport.exists(host, name)
         except URLError:
             logger.error("Failed to check if %s exists on %s.", name, host,
-                    exc_info=self.exc_info)
+                    exc_info=self.show_traceback)
             raise
 
     # It is not possible to implement listdir in pure HTTP. It could
@@ -279,7 +279,7 @@ class DistributedStorage(DistributedStorageMixin, Storage):
             return self.transport.size(host, name)
         except URLError:
             logger.error("Failed to get the size of %s from %s.", name, host,
-                    exc_info=self.exc_info)
+                    exc_info=self.show_traceback)
             raise
 
     def url(self, name):
@@ -342,5 +342,6 @@ class AsyncStorage(HybridStorage):
                 func(host, url, *args, **kwargs)
             except Exception:
                 action = func.__name__
-                logger.exception("Failed to %s %s on %s.", action, url, host)
+                logger.error("Failed to %s %s on %s.", action, url, host,
+                        exc_info=self.show_traceback)
         threading.Thread(target=execute_inner).start()
