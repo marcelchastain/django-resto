@@ -215,6 +215,21 @@ class DistributedStorageMixin(object):
             # Let's raise a random exception, we've logged them all anyway
             raise exceptions.popitem()[1][1]
 
+
+class DistributedStorage(DistributedStorageMixin, Storage):
+
+    """Backend that stores files remotely over HTTP."""
+
+    def __init__(self, hosts=None, base_url=None):
+        DistributedStorageMixin.__init__(self, hosts, base_url)
+        if not self.fatal_exceptions:
+            logger.warning("You're using the DistributedStorage backend with "
+                    "RESTO_FATAL_EXCEPTIONS = %r.", self.fatal_exceptions)
+            logger.warning("This is prone to data-loss problems, and I won't "
+                    "take any responsibility in what happens from now on.")
+            logger.warning("You have been warned.")
+        Storage.__init__(self)
+
     ### Hooks for custom storage objects
 
     def _open(self, name, mode='rb'):
@@ -236,11 +251,10 @@ class DistributedStorageMixin(object):
         self.execute_parallel(self.transport.create, name, content.read())
         return name
 
-    # The implementations of get_valid_name, get_available_name, path and url
-    # in Storage and FileSystemStorage are OK for DistributedStorage and
-    # HybridStorage.
-
     ### Mandatory methods
+
+    # The implementations of get_valid_name, get_available_name, and path
+    # in Storage are OK for DistributedStorage.
 
     def delete(self, name):
         self.execute_parallel(self.transport.delete, name)
@@ -270,21 +284,6 @@ class DistributedStorageMixin(object):
         return urljoin(self.base_url, filepath_to_uri(name))
 
 
-class DistributedStorage(DistributedStorageMixin, Storage):
-
-    """Backend that stores files remotely over HTTP."""
-
-    def __init__(self, hosts=None, base_url=None):
-        DistributedStorageMixin.__init__(self, hosts, base_url)
-        if not self.fatal_exceptions:
-            logger.warning("You're using the DistributedStorage backend with "
-                    "RESTO_FATAL_EXCEPTIONS = %r.", self.fatal_exceptions)
-            logger.warning("This is prone to data-loss problems, and I won't "
-                    "take any responsibility in what happens from now on.")
-            logger.warning("You have been warned.")
-        Storage.__init__(self)
-
-
 class HybridStorage(DistributedStorageMixin, FileSystemStorage):
 
     """Backend that stores files both locally and remotely over HTTP."""
@@ -300,7 +299,7 @@ class HybridStorage(DistributedStorageMixin, FileSystemStorage):
     ### Hooks for custom storage objects
 
     def _open(self, name, mode='rb'):
-        # Writing is forbidden, see DistributedStorageMixin._open.
+        # Writing is forbidden, see DistributedStorage._open.
         if mode != 'rb':
             raise IOError('Unsupported mode %r, use %r.' % (mode, 'rb'))
         return FileSystemStorage._open(self, name, mode)
@@ -311,20 +310,14 @@ class HybridStorage(DistributedStorageMixin, FileSystemStorage):
         # After this line, we will assume that 'name' is available on the
         # media servers. This could be wrong if a delete for this file name
         # failed at some point in the past.
-        DistributedStorageMixin._save(self, name, content)
+        self.execute_parallel(self.transport.create, name, content.read())
         return name
 
     ### Mandatory methods
 
+    # The implementations of get_valid_name, get_available_name, path, exists,
+    # listdir, size, and url in FileSystemStorage are OK for HybridStorage.
+
     def delete(self, name):
         FileSystemStorage.delete(self, name)
-        DistributedStorageMixin.delete(self, name)
-
-    def exists(self, name):
-        return FileSystemStorage.exists(self, name)
-
-    def listdir(self, name):
-        return FileSystemStorage.listdir(self, name)
-
-    def size(self, name):
-        return FileSystemStorage.size(self, name)
+        self.execute_parallel(self.transport.delete, name)
