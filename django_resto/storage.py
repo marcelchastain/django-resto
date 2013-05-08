@@ -201,12 +201,15 @@ class DistributedStorageMixin(object):
             except Exception:
                 exceptions[host] = sys.exc_info()
 
-        threads = [threading.Thread(target=execute_inner, args=(host,))
-                for host in self.hosts]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
+        if len(self.hosts) == 1:
+            execute_inner(self.hosts[0])
+        else:
+            threads = [threading.Thread(target=execute_inner, args=(host,))
+                    for host in self.hosts]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
 
         for host, exc_info in exceptions.items():
             action = func.__name__
