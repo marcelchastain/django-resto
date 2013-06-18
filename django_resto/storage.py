@@ -4,7 +4,7 @@ import logging
 import random
 import sys
 import threading
-try:
+try:                                                        # cover: disable
     from urllib.parse import quote, urljoin, urlsplit, urlunsplit
     from urllib.request import HTTPError, Request, URLError, urlopen
 except ImportError:
@@ -13,7 +13,6 @@ except ImportError:
     from urlparse import urljoin, urlsplit, urlunsplit
 
 from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured
 from django.core.files.base import ContentFile
 from django.core.files.storage import Storage, FileSystemStorage
 from django.utils.encoding import filepath_to_uri
@@ -83,18 +82,26 @@ class DefaultTransport(object):
         self.scheme = scheme or 'http'
         self.path = path or '/'
 
-    def get_url(self, host, name):
-        """Return the full URL for a file on a given host (internal use)."""
+    ### Hooks for custom transports
+
+    def _get_url(self, host, name):
+        """Return the full URL for a file on a given host."""
         path = self.path + quote(name.encode('utf-8'))
         return urlunsplit((self.scheme, host, path, '', ''))
+
+    def _http_request(self, request):
+        """Return a response object for a given request."""
+        return urlopen(request, timeout=self.timeout)
+
+    ### Wrappers around HTTP methods
 
     def content(self, host, name):
         """Get the content of a file as a string.
 
         URLError will be raised if something goes wrong.
         """
-        url = self.get_url(host, name)
-        resp = urlopen(GetRequest(url), timeout=self.timeout)
+        url = self._get_url(host, name)
+        resp = self._http_request(GetRequest(url))
         if resp.code != 200:
             raise UnexpectedStatusCode(resp)
         length = resp.info().get('Content-Length')
@@ -110,9 +117,9 @@ class DefaultTransport(object):
 
         URLError will be raised if something goes wrong.
         """
-        url = self.get_url(host, name)
+        url = self._get_url(host, name)
         try:
-            resp = urlopen(HeadRequest(url), timeout=self.timeout)
+            resp = self._http_request(HeadRequest(url))
             if resp.code != 200:
                 raise UnexpectedStatusCode(resp)
             return True
@@ -128,8 +135,8 @@ class DefaultTransport(object):
 
         URLError will be raised if something goes wrong.
         """
-        url = self.get_url(host, name)
-        resp = urlopen(HeadRequest(url), timeout=self.timeout)
+        url = self._get_url(host, name)
+        resp = self._http_request(HeadRequest(url))
         if resp.code != 200:
             raise UnexpectedStatusCode(resp)
         length = resp.info().get('Content-Length')
@@ -145,8 +152,8 @@ class DefaultTransport(object):
 
         URLError will be raised if something goes wrong.
         """
-        url = self.get_url(host, name)
-        resp = urlopen(PutRequest(url, content), timeout=self.timeout)
+        url = self._get_url(host, name)
+        resp = self._http_request(PutRequest(url, content))
         if resp.code == 201:
             return False
         elif resp.code == 204:
@@ -162,9 +169,9 @@ class DefaultTransport(object):
 
         URLError will be raised if something goes wrong.
         """
-        url = self.get_url(host, name)
+        url = self._get_url(host, name)
         try:
-            resp = urlopen(DeleteRequest(url), timeout=self.timeout)
+            resp = self._http_request(DeleteRequest(url))
             if resp.code not in (200, 204):
                 raise UnexpectedStatusCode(resp)
             return True
@@ -240,7 +247,7 @@ class DistributedStorage(DistributedStorageMixin, Storage):
     def _open(self, name, mode='rb'):
         # Allowing writes would be doable, if we distribute the file to the
         # media servers when it's closed. Let's forbid it for now.
-        if mode != 'rb':
+        if mode != 'rb':                                    # cover: disable
             raise IOError('Unsupported mode %r, use %r.' % (mode, 'rb'))
         host = random.choice(self.hosts)
         try:
@@ -305,7 +312,7 @@ class HybridStorage(DistributedStorageMixin, FileSystemStorage):
 
     def _open(self, name, mode='rb'):
         # Writing is forbidden, see DistributedStorage._open.
-        if mode != 'rb':
+        if mode != 'rb':                                    # cover: disable
             raise IOError('Unsupported mode %r, use %r.' % (mode, 'rb'))
         return FileSystemStorage._open(self, name, mode)
 
