@@ -1,19 +1,14 @@
 from __future__ import unicode_literals
 
-try:
+import socket
+try:                                                        # cover: disable
     from http.server import BaseHTTPRequestHandler, HTTPServer
     from urllib.parse import unquote
-    from urllib.request import Request
+    from urllib.request import URLError, urlopen
 except ImportError:
     from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
     from urllib import unquote
-    from urllib2 import Request
-
-
-class StopRequest(Request):
-    """Non-standard HTTP request, used to stop the test server."""
-    def get_method(self):
-        return 'STOP'
+    from urllib2 import URLError, urlopen
 
 
 class TestHttpServerRequestHandler(BaseHTTPRequestHandler):
@@ -27,7 +22,7 @@ class TestHttpServerRequestHandler(BaseHTTPRequestHandler):
     def filename(self):
         if isinstance(self.path, bytes):                # Python 2
             return unquote(self.path.lstrip(b'/')).decode('utf-8')
-        else:
+        else:                                           # cover: disable
             return unquote(self.path.lstrip('/'))
 
     @property
@@ -76,11 +71,6 @@ class TestHttpServerRequestHandler(BaseHTTPRequestHandler):
         else:
             self.no_content()
 
-    def do_STOP(self):
-        self.server.running = False
-        self.server.override_code = None
-        self.no_content()
-
     def log_request(self, code=None, size=None):
         code = self.server.override_code or code
         self.server.log.append((self.command, self.path, code))
@@ -100,12 +90,12 @@ class TestHttpServer(HTTPServer):
     This class provides a basic, in-memory implementation of GET, HEAD, PUT
     and DELETE, as well as a few methods to manage the pseudo-files.
 
-    When readonly is True, PUT and DELETE requests are be forbidden.
-
-    Once self.run() is called, the server will handle requests until it
-    receives a request with a STOP method -- see the StopRequest class.
-
     self.log keeps a record of (method, path, response code) for each query.
+
+    When self.override_code isn't None, this HTTP status code is returned in
+    every response.
+
+    When self.readonly is True, PUT and DELETE requests are forbidden.
 
     self.override_code and self.readonly are used to test invalid behaviors.
     """
@@ -115,21 +105,41 @@ class TestHttpServer(HTTPServer):
         self.log = []
         self.override_code = None
         self.readonly = False
+        self.running = True
         HTTPServer.__init__(self, (host, port), TestHttpServerRequestHandler)
 
     def has_file(self, name):
+        """Test if a file exists on the server."""
         return name in self.files
 
     def get_file(self, name):
+        """Obtain the contents of a file on the server."""
         return self.files[name]
 
     def create_file(self, name, content):
+        """Create a file on the server."""
         self.files[name] = content
 
     def delete_file(self, name):
+        """Delete a file on the server."""
         del self.files[name]
 
     def run(self):
-        self.running = True
+        """Start the server.
+
+        It will handle requests until it receives a request with a STOP method.
+        """
         while self.running:
             self.handle_request()
+
+    def stop(self, timeout=0.1):
+        """Stop the server."""
+        if self.running:
+            self.running = False
+            # Make a random query to unblock the main loop.
+            try:
+                urlopen('http://%s:%d/' % self.server_address, timeout=timeout)
+            except (URLError, socket.timeout):
+                pass
+        else:                                               # cover: disable
+            print("Warning: stop() called with server wasn't running!")

@@ -1,7 +1,6 @@
 from __future__ import unicode_literals
 
 import os.path
-import socket
 import threading
 try:
     from urllib.request import URLError, urlopen
@@ -12,7 +11,7 @@ except ImportError:
 from django.conf import settings
 from django.utils import unittest
 
-from ..http_server import StopRequest, TestHttpServer
+from ..http_server import TestHttpServer
 from ..storage import GetRequest, HeadRequest, DeleteRequest, PutRequest
 
 
@@ -34,12 +33,10 @@ class HttpServerTestCaseMixin(object):
         self.thread.start()
 
     def tearDown(self):
-        super(HttpServerTestCaseMixin, self).tearDown()
-        try:
-            urlopen(StopRequest(self.url), timeout=0.1)
-        except (URLError, socket.timeout):
-            pass
+        self.http_server.stop()
+        self.thread.join()
         self.http_server.server_close()
+        super(HttpServerTestCaseMixin, self).tearDown()
 
     def assertHttpSuccess(self, *args):
         return urlopen(*args).read()            # URLError not raised.
@@ -75,10 +72,7 @@ class ExtraHttpServerTestCaseMixin(object):
         self.alt_url = 'http://%s:%d/' % (self.host, self.port + 1)
 
     def tearDown(self):
-        try:
-            urlopen(StopRequest(self.alt_url), timeout=0.1)
-        except (URLError, socket.timeout):
-            pass
+        self.alt_http_server.stop()
         self.alt_thread.join()
         self.alt_http_server.server_close()
         super(ExtraHttpServerTestCaseMixin, self).tearDown()
@@ -168,13 +162,3 @@ class HttpServerTestCase(HttpServerTestCaseMixin, unittest.TestCase):
             ('PUT', self.path, 204),
             ('PUT', self.path, 403),
         ])
-
-
-class HttpServerShutDownTestCase(ExtraHttpServerTestCaseMixin,
-        HttpServerTestCaseMixin, unittest.TestCase):
-
-    def test_tear_down_works_even_if_server_is_stopped(self):
-        self.assertHttpSuccess(StopRequest(self.url))
-
-    def test_tear_down_works_even_if_alt_server_is_stopped(self):
-        self.assertHttpSuccess(StopRequest(self.alt_url))
