@@ -83,29 +83,31 @@ You can configure the behavior of django-resto when a media server is
 unavailable:
 
 - If ``RESTO_FATAL_EXCEPTIONS`` is ``True``, which is the default value,
-  django-resto will raise an exception whenever an operation doesn't succeed on
-  all media servers. From the user's point of view, this usually results in an
-  HTTP 500 error, unless you have some advanced error handling. This ensures
-  that a failure won't go unnoticed.
+  django-resto will raise an exception whenever an operation doesn't succeed
+  on all media servers. From the user's point of view, this usually results in
+  an HTTP 500 error, unless you have some advanced error handling. This
+  ensures that a failure won't go unnoticed.
+
 - If ``RESTO_FATAL_EXCEPTIONS`` is ``False``, django-resto will log a message
   at level ``ERROR`` for each failed upload. This is useful if you want high
   availability: if one media server is down, you can still upload and delete
   files.
 
-In either case, since each operation is run in parallel on all the servers, it
-may succeed on some and fail on others. This results in an inconsistent state
-on the media servers. When you bring a broken server back online, you must
-re-synchronize the contents of its ``MEDIA_ROOT`` from the master copy, for
-instance with ``rsync``. You can also set up a cron if you get random failures
-during load peaks. This provides eventual consistency.
+In either case, since each operation is run in parallel on all media servers,
+it may succeed on some and fail on others. This results in an inconsistent
+state on the media servers. When you bring a broken server back online, you
+must re-synchronize the contents of its ``MEDIA_ROOT`` from the master copy,
+for instance with ``rsync``. You can also set up a cron if you get random
+failures during load peaks. This provides eventual consistency.
 
-Obviously, if you bring an additional media server online, you must synchronize
-the content of its ``MEDIA_ROOT`` from the master copy.
+Obviously, if you bring an additional media server online, you must
+synchronize the content of its ``MEDIA_ROOT`` from the master copy.
 
 django_dust keeps a queue of failed operations to repeat them afterwards. This
-feature was removed in django-resto. It is prone to data loss, because the
+feature was removed in django-resto. It was prone to data loss, because the
 order of ``PUT`` and ``DELETE`` operations matters, and retrying failed
-operations later breaks the order. So, use ``rsync`` instead, it's fast enough.
+operations later breaks the order. So, use ``rsync`` instead, it's fast
+enough.
 
 Asynchronous operation
 ----------------------
@@ -164,8 +166,8 @@ Setup
 Installation guide
 ------------------
 
-django-resto requires Python 2.6, 2.7, 3.2 or 3.3. It works with all currently
-supported versions of Django.
+django-resto requires Python 2.6, 2.7, 3.2 or 3.3. It works with Django 1.4 or
+1.5 (and should work with 1.6 once it's released).
 
 1.  Download and install the package from PyPI::
 
@@ -186,7 +188,8 @@ supported versions of Django.
 
 4.  Make sure you have configured ``MEDIA_ROOT`` and ``MEDIA_URL``.
 
-5.  Set up your media servers to enable file uploads.
+5.  Set up your media servers to enable file uploads. See `Configuring the
+    media servers`_ for some examples.
 
 Backends
 --------
@@ -224,7 +227,8 @@ List of host names for the media servers.
 
 The URL used to upload or delete a given media file is built using
 ``MEDIA_URL``. It is the same URL used by the end user to download the file,
-except that the host name changes. It isn't possible to use HTTPS.
+except that the host name changes. It isn't possible to use HTTPS at this
+time.
 
 ``RESTO_FATAL_EXCEPTIONS``
 ..........................
@@ -253,7 +257,7 @@ This controls the maximum amount of time an upload operation can take. Note
 that all uploads run in parallel.
 
 Configuring the media servers
-=============================
+-----------------------------
 
 The backend uses HTTP to transfer files to media servers. The HTTP server must
 support the ``PUT`` and ``DELETE`` methods according to RFC 2616.
@@ -295,6 +299,56 @@ Here is an example of nginx config, assuming the server was compiled
 
 .. _RFC 2518: http://www.rfc-editor.org/rfc/rfc2518.txt
 .. _RFC 2616: http://www.rfc-editor.org/rfc/rfc2616.txt
+
+Advanced use
+============
+
+Extending
+---------
+
+django-resto provides a robust base for distributing uploaded files. However,
+sites requiring this level of optimization often have custom requirements, and
+django-resto cannot cover every use case.
+
+It would be impractical to provide settings to control every variation of the
+upload behavior, and it would still allow only a limited set of behaviors.
+
+Instead, the recommended way to extend or modify the behavior of django-resto
+is to pick the storage class that best matches your requirements and write a
+subclass.
+
+This approach is more flexible. You can to take advantage of the testing tools
+provided by django-resto to validate your customizations.
+
+API stability
+-------------
+
+Functions or methods that have a docstring are considered stable. Their
+behavior won't change unless absolutely necessary, and if it does, the changes
+will be documented. They may be used or overridden in subclasses to tweak
+django-resto's behavior.
+
+The stable APIs are:
+
+- the ``execute*`` methods of the storage classes,
+- all methods of ``django_resto.storage.DefaultTransport``,
+- all methods of ``django_resto.http_server.TestHttpServer``,
+- the function ``django_resto.settings.get_setting``.
+
+History
+=======
+
+1.1
+---
+
+* Document the public API.
+* Support asynchronous upload to media servers.
+
+1.0
+---
+
+* Initial stable release.
+* Support hybrid and distributed upload to media servers.
 
 .. for Sphinx
 .. toctree::
