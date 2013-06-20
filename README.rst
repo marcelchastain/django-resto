@@ -171,26 +171,22 @@ supported versions of Django.
 
         $ pip install django-resto
 
-2.  Add ``django_resto`` to ``INSTALLED_APPS``::
-
-        INSTALLED_APPS += 'django_resto',
-
-3.  Set a default file backend, if you want all your models to use it::
+2.  Set a default file backend, if you want all your models to use it::
 
         DEFAULT_FILE_STORAGE = 'django_resto.storage.HybridStorage'
 
     This is optional. You can also enable a backend only for selected fields
     in your models.
 
-4.  Define the list of your media servers::
+3.  Define the list of your media servers::
 
         RESTO_MEDIA_HOSTS = ['media-%02d:8080' % i for i in range(12)]
 
     OK, maybe you don't have 12 servers just yet.
 
-5.  Make sure you have configured ``MEDIA_ROOT`` and ``MEDIA_URL``.
+4.  Make sure you have configured ``MEDIA_ROOT`` and ``MEDIA_URL``.
 
-6.  Set up your media servers to enable file uploads.
+5.  Set up your media servers to enable file uploads.
 
 Backends
 --------
