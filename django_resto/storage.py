@@ -189,14 +189,14 @@ class DistributedStorageMixin(object):
     fatal_exceptions = get_setting('FATAL_EXCEPTIONS')
     show_traceback = get_setting('SHOW_TRACEBACK')
 
-    def __init__(self, hosts=None, base_url=None):
+    def __init__(self, hosts=None, base_url=None, transport=DefaultTransport):
         if hosts is None:                                   # cover: disable
             hosts = get_setting('MEDIA_HOSTS')
         self.hosts = hosts
         if base_url is None:                                # cover: disable
             base_url = settings.MEDIA_URL
         self.base_url = base_url
-        self.transport = DefaultTransport(base_url=self.base_url)
+        self.transport = transport(base_url=base_url)
 
     def execute(self, func, url, *args, **kwargs):
         """Run an action over several hosts in parallel."""
