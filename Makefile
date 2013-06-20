@@ -13,4 +13,4 @@ coverage:
 clean:
 	find . -name '*.pyc' -delete
 	find . -name __pycache__ -delete
-	rm -rf django_resto/tests/tests .coverage dist htmlcov MANIFEST
+	rm -rf django_resto/tests/tests .coverage docs/_build dist htmlcov MANIFEST

@@ -4,15 +4,15 @@ import os
 # Avoid polluting the .tar.gz with ._* files under Mac OS X
 os.putenv('COPYFILE_DISABLE', 'true')
 
-description = ('REplicated STOrage for Django, a file backend '
-               'that mirrors media files to several servers over HTTP')
+description = ('REplicated STOrage for Django, file backends '
+               'that mirror media files to several servers over HTTP')
 
 with open(os.path.join(os.path.dirname(__file__), 'README')) as f:
     long_description = '\n\n'.join(f.read().split('\n\n')[2:8])
 
 distutils.core.setup(
     name='django-resto',
-    version='1.0.1',
+    version='1.1',
     author='Aymeric Augustin',
     author_email='aymeric.augustin@m4x.org',
     url='https://github.com/aaugustin/django-resto',

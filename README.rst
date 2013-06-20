@@ -1,5 +1,5 @@
-README
-######
+django-resto: replicated media storage for Django
+#################################################
 
 Introduction
 ============
@@ -295,3 +295,6 @@ Here is an example of nginx config, assuming the server was compiled
 
 .. _RFC 2518: http://www.rfc-editor.org/rfc/rfc2518.txt
 .. _RFC 2616: http://www.rfc-editor.org/rfc/rfc2616.txt
+
+.. for Sphinx
+.. toctree::
