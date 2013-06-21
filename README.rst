@@ -349,6 +349,3 @@ History
 
 * Initial stable release.
 * Support hybrid and distributed upload to media servers.
-
-.. for Sphinx
-.. toctree::
