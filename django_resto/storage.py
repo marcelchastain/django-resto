@@ -351,7 +351,6 @@ class AsyncStorage(HybridStorage):
     def execute_one(self, func, host, url, *args, **kwargs):
         """Run a single action asynchronously."""
         def execute_inner():
-            # Insert a delay here to actually test the asynchronous behavior.
             try:
                 func(host, url, *args, **kwargs)
             except Exception:
